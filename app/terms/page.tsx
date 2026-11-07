@@ -90,12 +90,25 @@ export default function TermsPage() {
 
       <Section heading="Content Reporting and Moderation">
         <p>
-          Users may report content they believe violates these Terms through
-          in-app reporting tools.
+          Text submitted by users for display on a venue screen is screened
+          automatically against a list of prohibited words. Anything that trips
+          that screening is not shown, and where a payment was authorised for
+          it, the payment is cancelled and not taken.
         </p>
         <p>
-          Reported content is reviewed by our moderation team and removed within
-          24 hours if it violates our policies.
+          The performing artist controls what appears during their own show.
+          They can take a submitted phrase down from their screen at any time,
+          switch audience sound effects off entirely, add further prohibited
+          words for their own shows, and block a user from commenting on their
+          profile.
+        </p>
+        <p>
+          To report content you believe violates these Terms, contact us at{' '}
+          <a className="underline" href="mailto:adrian@dreadrocksoftware.com">
+            adrian@dreadrocksoftware.com
+          </a>
+          . We review reports promptly and remove content that violates these
+          Terms.
         </p>
         <p>
           Repeat violators may have their accounts suspended or permanently
