@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 
+import { LegalPage, LegalSection as Section } from '@/components/legal/LegalPage';
+
 export const metadata: Metadata = {
   title: 'Terms of Service — Tell Me What To Play',
   description:
@@ -11,30 +13,16 @@ export const metadata: Metadata = {
 // launch. The App Store rating has to align with the minimum stated here, and
 // an app that asks a fan to confirm they are 18 cannot link to terms that say
 // anything else.
-const Section = ({
-  heading,
-  children,
-}: {
-  heading: string;
-  children: React.ReactNode;
-}) => (
-  <section className="mb-8">
-    <h2 className="mb-2 text-xl font-semibold text-white">{heading}</h2>
-    <div className="space-y-3 text-base leading-relaxed text-white/75">
-      {children}
-    </div>
-  </section>
-);
-
 export default function TermsPage() {
   return (
-    <main className="mx-auto max-w-3xl px-6 py-16">
-      <h1 className="mb-2 text-3xl font-bold text-white">
-        Terms of Service of Dreadrock Software LLC
-      </h1>
-      <p className="mb-10 text-sm text-white/50">
-        Applies to the Tell Me What To Play app.
-      </p>
+    <LegalPage
+      title="Terms of Service of Dreadrock Software LLC"
+      subtitle="Applies to the Tell Me What To Play app."
+      // The date the TEXT last changed (the moderation section), not the date
+      // of the last deploy.
+      updated="2026-11-07"
+      sibling={{ href: '/privacy', label: 'Privacy Policy' }}
+    >
 
       <Section heading="Age Requirement">
         <p>
@@ -171,6 +159,6 @@ export default function TermsPage() {
           .
         </p>
       </Section>
-    </main>
+    </LegalPage>
   );
 }
