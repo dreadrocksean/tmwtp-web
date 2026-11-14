@@ -32,6 +32,9 @@ export const SFX_FAMILIES: Record<string, readonly string[]> = {
   "freebird": [
     "/sfx/freebird.m4a",
   ],
+  "gong": [
+    "/sfx/gong.m4a",
+  ],
   "large-crowd": [
     "/sfx/large-crowd.mp3",
   ],
