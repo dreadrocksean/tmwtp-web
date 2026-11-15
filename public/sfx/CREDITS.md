@@ -7,32 +7,23 @@ they are clear.
 
 | File | Source | Licence | Attribution required |
 |---|---|---|---|
-| `gong.m4a` | Supplied by Adrian | **Unrecorded** | **Unknown** |
+| `gong.m4a` | Supplied by Adrian | Cleared by Adrian 2026-11-15 | No |
 
 ## gong.m4a
+
+**CLEARED.** Adrian confirmed 2026-11-15 that this file is fine to use. No
+licence terms are claimed against it and no attribution is owed, so the game
+cue can ship on `main` and play through venue PAs.
+
+What is recorded here is Adrian's clearance, not a traced chain of title. If
+the file ever needs to be defended rather than merely used, the original
+source still is not written down anywhere.
 
 Chosen by ear, which is the only way to choose a sound and not something that
 can be done from metadata — three CC0 candidates were sourced and rejected
 before this one, including one whose own description said "small hanging
-gong".
-
-ITS LICENCE IS NOT RECORDED. If it came from a library with terms — most free
-gongs are CC BY, which needs a credit this app has nowhere to display — that
-obligation exists whether or not anybody wrote it down.
-
-**IT HAS NOW SHIPPED.** As of the GongSong wiring it is a game cue on the TV
-board, fired through the venue PA whenever an artist accepts a gong. That
-changes this from a question worth answering to one that is being answered by
-default, every gig, in public. The only person who can close it is whoever put
-the file in `~/Downloads` — if it was recorded or bought, say so here and this
-note goes away; if it came off a free library, the library's name is enough to
-settle whether a credit is owed.
-
-Swapping it is cheap (drop a new `gong.m4a` in, the manifest rebuilds on
-predev/prebuild). Un-shipping a sound a thousand people have already heard
-through a PA is not.
-
-The CC0 candidates, if the provenance of this one turns out to be awkward:
+gong". Kept here in case it is ever swapped (drop a new `gong.m4a` in and the
+manifest rebuilds on predev/prebuild):
 
 | Sound | Length | |
 |---|---|---|
