@@ -407,6 +407,9 @@ const TvBoard: React.FC<TvBoardProps> = ({
   // because that listener only exists on a board opened with ?fx=1 — the
   // desk's copy — and the game has to appear on every screen in the venue.
   const [game, setGame] = useState<ShowGame | null>(null);
+  // "songId:at" of the last ACCEPTED gong, or null. A key rather than a
+  // boolean so a second gong on the same song still reads as news.
+  const [gonged, setGonged] = useState<string | null>(null);
   // The phrase holding the wall, on the same subscription as the game: one
   // document, one listener, and a bid lands on every screen in the venue at
   // the same moment.
@@ -444,6 +447,13 @@ const TvBoard: React.FC<TvBoardProps> = ({
   const revealedRef = useRef<string | null>(null);
   const revealPrimedRef = useRef(false);
   const fanfareTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // GongSong. Same priming discipline as the winner takeover and for the same
+  // reason: a board opened or reloaded inside the 45s an outcome stays on the
+  // doc would otherwise strike the gong for a song that was already gonged
+  // before anybody plugged this screen in.
+  const gongSeenRef = useRef(false);
+  const gongPrimedRef = useRef(false);
+  const lastGongRef = useRef<string | null>(null);
 
   useEffect(() => {
     const current = board.recentTip;
@@ -629,8 +639,27 @@ const TvBoard: React.FC<TvBoardProps> = ({
       doc(db, "artists", board.artistId, "shows", board.showId),
       (snap) => {
         gameSeenRef.current = true;
+        gongSeenRef.current = true;
         const data = snap.data() ?? {};
         setGame(toShowGame(data.game));
+
+        // The gong, off the same read rather than a third listener on the
+        // same document. Only the ACCEPTED outcome is a gong -- a decline is
+        // a private answer to one guest and announcing it to the room would
+        // be the board telling on somebody who was not charged.
+        //
+        // No name is taken from here. stopOutcome carries a uid and the board
+        // is public; the gong says a song was bought off the stage, not who
+        // bought it.
+        const outcome = data.stopOutcome as
+          | { resolution?: string; songId?: string; at?: number }
+          | undefined;
+        setGonged(
+          outcome && outcome.resolution === "accepted" &&
+            typeof outcome.at === "number"
+            ? `${outcome.songId ?? ""}:${outcome.at}`
+            : null
+        );
 
         const next = toShowPhrase(data.phrase);
         const key = phraseKey(next);
@@ -696,6 +725,29 @@ const TvBoard: React.FC<TvBoardProps> = ({
       setConfetti(false);
     }, GAME_FANFARE_MS);
   }, [game?.id, game?.winner, cue]);
+
+  // GongSong: the room hears the song get bought off the stage.
+  //
+  // This is the whole gesture the feature is named after, and it is the one
+  // moment the board has to carry, because the artist stopping mid-song is
+  // otherwise indistinguishable from the artist simply finishing. Forced, so
+  // a cooldown left over from the crowd's effects cannot swallow it.
+  useEffect(() => {
+    if (!gonged) {
+      // A cleared outcome is not news; it is the 45s TTL expiring. Hold the
+      // last key so the same gong cannot fire twice if it flickers back.
+      return;
+    }
+    if (!gongPrimedRef.current) {
+      if (!gongSeenRef.current) return;
+      gongPrimedRef.current = true;
+      lastGongRef.current = gonged;
+      return;
+    }
+    if (gonged === lastGongRef.current) return;
+    lastGongRef.current = gonged;
+    cue("gong");
+  }, [gonged, cue]);
 
   // Retire the panel the moment its window lapses, rather than when some
   // other render happens along. Same job as the fan screen's timer.

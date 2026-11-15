@@ -24,6 +24,7 @@ import {
   createRoomGovernor,
   resolvePlaying,
   SOUND_KIND,
+  ruleFor,
   type SoundBlockReason,
   type SoundDecision,
   ARTIST_SIGNAL_STALE_MS,
@@ -352,7 +353,7 @@ describe('sound families', () => {
 // "here is the answer", so unlike every other sound on the board these two
 // make a CLAIM — which is exactly why no fan may fire them.
 describe('game cues', () => {
-  test('both cues can actually make a noise', () => {
+  test('every cue can actually make a noise', () => {
     for (const id of GAME_CUE_IDS) {
       const entry = SOUND_LIST.find((s) => s.id === id);
       assert.ok(entry, `${id} missing from SOUND_LIST`);
@@ -364,6 +365,26 @@ describe('game cues', () => {
     for (const id of GAME_CUE_IDS) {
       assert.equal(isFanSoundId(id), false, `${id} is fan-playable`);
     }
+  });
+
+  // GongSong's gong, which has two constraints the other cues do not.
+  test('the gong is one file, not a family', () => {
+    // The engine picks from a family at random. A second gong*.m4a would make
+    // a branded moment play a different gong sometimes, which is the one
+    // thing a signature sound must never do.
+    const entry = SOUND_LIST.find((s) => s.id === 'gong');
+    assert.ok(entry, 'gong missing from SOUND_LIST');
+    assert.equal(entry.variants, 1, 'gong must be exactly one sample');
+  });
+
+  test('the gong outlasts its own decay before it can ring again', () => {
+    // A gong rings for five or six seconds. On the `hit` default of 6s a
+    // second one could start under the first, which does not read as mud --
+    // it reads as a second song being gonged, which is a lie.
+    assert.ok(
+      ruleFor('gong').cooldownMs > 6000,
+      'gong cooldown must clear its own decay'
+    );
   });
 
   test('the reference tone is not mistaken for a game cue', () => {

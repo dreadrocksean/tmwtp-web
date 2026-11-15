@@ -18,8 +18,19 @@ gong".
 
 ITS LICENCE IS NOT RECORDED. If it came from a library with terms — most free
 gongs are CC BY, which needs a credit this app has nowhere to display — that
-obligation exists whether or not anybody wrote it down. Worth a line here
-before it ships.
+obligation exists whether or not anybody wrote it down.
+
+**IT HAS NOW SHIPPED.** As of the GongSong wiring it is a game cue on the TV
+board, fired through the venue PA whenever an artist accepts a gong. That
+changes this from a question worth answering to one that is being answered by
+default, every gig, in public. The only person who can close it is whoever put
+the file in `~/Downloads` — if it was recorded or bought, say so here and this
+note goes away; if it came off a free library, the library's name is enough to
+settle whether a credit is owed.
+
+Swapping it is cheap (drop a new `gong.m4a` in, the manifest rebuilds on
+predev/prebuild). Un-shipping a sound a thousand people have already heard
+through a PA is not.
 
 The CC0 candidates, if the provenance of this one turns out to be awkward:
 
