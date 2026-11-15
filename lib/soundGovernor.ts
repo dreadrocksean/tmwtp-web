@@ -60,6 +60,7 @@ export const SOUND_KIND: Record<SoundId, SoundKind> = {
   // operator panel can file them somewhere.
   test: "hit",
   fanfare: "hit",
+  gong: "hit",
   sparkle: "hit",
 };
 
@@ -155,6 +156,11 @@ const SOUND_RULE: Partial<Record<SoundId, Partial<SoundRule>>> = {
   // let the next explosion start while the last one is still falling, which
   // is mud rather than punctuation.
   explosion: { cooldownMs: 16000 },
+  // A gong rings for five or six seconds. The `hit` default of 6s would let
+  // the next one start while the last is still ringing -- and unlike an
+  // explosion, two overlapping gongs are not mud, they are a second song
+  // being gonged, which is a lie about what just happened in the room.
+  gong: { cooldownMs: 12000 },
 };
 
 export const ruleFor = (

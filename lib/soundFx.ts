@@ -74,6 +74,7 @@ export type SoundId =
   // fired by what the game does rather than by anyone pressing anything.
   | "fanfare"
   | "sparkle"
+  | "gong"
   // Not a sound effect — the engineer's reference tone.
   | "test";
 
@@ -471,6 +472,21 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
   // opened on a borrowed laptop on venue wifi, and a file that has not
   // finished downloading is a cue that does not fire.
 
+  // GongSong. The one game cue that is a RECORDING rather than a render:
+  // a gong is a specific physical object and a synthesized one sounds like a
+  // cymbal, which is the joke landing wrong in front of a paying room. The
+  // tradeoff is the one the renders exist to avoid -- it has to download --
+  // and it is worth taking here because the cue fires only after somebody has
+  // paid, by which point the board has been open all night.
+  //
+  // ONE file, deliberately. The manifest groups by filename stem and the
+  // engine picks from a family at random, so a second gong*.m4a would make a
+  // branded moment play a different gong sometimes.
+  gong: {
+    label: "Gong (song gonged)",
+    seconds: 6,
+  },
+
   fanfare: {
     label: "Fanfare (winner)",
     seconds: 2.6,
@@ -682,7 +698,7 @@ export const SOUND_LIST: {
 // apart from the catalogue: they still need auditioning at the desk — a cue
 // nobody has heard is a cue that fails in front of a room — but listing them
 // among the hits would say a fan could press them.
-export const GAME_CUE_IDS: readonly SoundId[] = ["fanfare", "sparkle"];
+export const GAME_CUE_IDS: readonly SoundId[] = ["fanfare", "sparkle", "gong"];
 
 const NOT_FAN_PLAYABLE: ReadonlySet<SoundId> = new Set<SoundId>([
   "test",
