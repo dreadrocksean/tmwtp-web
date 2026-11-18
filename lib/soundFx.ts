@@ -102,12 +102,12 @@ interface SoundSpec {
   // with a plausible stand-in keep theirs.
   render?: (ctx: RenderCtx) => void;
   // A BED runs for ten to thirty seconds under the band rather than landing
-  // as a hit. Two differences follow, both enforced in play():
-  //   - it never stacks on ITSELF: starting a bed fades out that same bed's
-  //     previous run, because a cooldown measured in seconds cannot stop a
-  //     30s texture from piling up on top of itself. Different beds DO
-  //     layer — rain under a battle is a scene, and the one-slot-for-all
-  //     version of this cut a long rain off whenever anything else started;
+  // as a hit. Three differences follow, all enforced in play():
+  //   - it OVERLAPS itself, at a shared level. A second press extends the
+  //     texture rather than restarting it or doubling its loudness, which is
+  //     the only reading of "press rain again" that a fan ever means;
+  //   - a press while it is already running is a SUSTAIN, so the ambience
+  //     cooldown — which exists to space out arrivals — does not refuse it;
   //   - it is trimmed below the one-shots. Levelling everything to one target
   //     is right for hits, but a wash of surf matched to the loudness of a
   //     thunder clap sits on top of the band instead of behind it.
@@ -119,9 +119,12 @@ interface SoundSpec {
 // Beds are trimmed to this under the levelled target.
 const BED_TRIM = 0.55;
 
-// Long enough for the longest bed to be cut off cleanly rather than clicking.
-// This is the INTERRUPTION fade — short on purpose, because the point of a
-// replacement is that the new bed takes over.
+// The crossfade used when a bed's level is shared out — a second run of the
+// same bed arriving, or one of them ending and handing its share back.
+//
+// It used to be the INTERRUPTION fade, for when a bed replaced itself. Nothing
+// is interrupted now: the sum is meant to stay exactly where it was, so the
+// only job this length has is to keep the change off a step edge.
 const BED_FADE_S = 0.25;
 
 // The fade a bed gets as it reaches its own end, which is a different job.
@@ -130,6 +133,39 @@ const BED_FADE_S = 0.25;
 // passing. Seconds, not milliseconds — this one is meant to be heard as the
 // sound leaving, so it is roughly the length of a slow hand on a fader.
 const BED_TAIL_FADE_S = 2;
+
+// HOW MANY TAKES OF THE SAME SOUND MAY BE AUDIBLE AT ONCE.
+//
+// Adrian, 2026-11-18: "maybe cap at 10 for the SAME sound and leave open for
+// different ones?"
+//
+// It was one global ceiling of ten, and that is the wrong shape. The eleventh
+// take of `applause` and the eleventh DIFFERENT sound are not the same event:
+// ten copies of one recording is the point past which no listener can pick
+// another one out, while ten different sounds is a scene — rain under a
+// battle under a cheer — and whether the room may have that many is the
+// governor's density budget to answer, because it is the layer that knows
+// what the sounds ARE. A count of voices cannot tell weather from a fight.
+//
+// So the ceiling is per id, and nothing here limits the total. The eleventh
+// `applause` is the only thing being refused.
+const MAX_VOICES_PER_SOUND = 10;
+
+// One run of one bed, and the one node that run's level is adjusted on.
+//
+// A bed is played through TWO gain nodes, and the split is the whole reason it
+// can overlap itself. The upstream one carries trim and the tail fade, both
+// scheduled once when the run starts and never touched again. This one, held
+// here, carries the run's share of the bed's level and is re-ramped every
+// time a run of the same bed arrives or ends.
+//
+// On a single node those two jobs collide: sharing out the level means
+// cancelling scheduled values, which would wipe a tail fade written twenty
+// seconds earlier and leave a wash of surf to stop dead.
+type BedRun = {
+  level: GainNode;
+  source: AudioBufferSourceNode;
+};
 
 // Deterministic noise. The same seed gives the same sound every render, so a
 // change to one of these is an actual change rather than a different roll of
@@ -850,25 +886,34 @@ export const createSoundBoard = (options?: {
   let master: GainNode | null = null;
   let ready = false;
   let rendering: Promise<void> | null = null;
-  // The bed currently running FOR EACH ID, not one slot for all of them.
+  // EVERY RUN OF EVERY BED THAT IS STILL SOUNDING. A set per id, not one
+  // entry per id.
   //
-  // A single slot meant any bed killed any other, which is wrong twice over:
-  // it cut a twenty-five second rain off two seconds in because somebody
-  // pressed Large crowd, and Large crowd is not even weather — it is a crowd
-  // sound that happens to be long, which is exactly the case `bed` and `kind`
-  // are kept separate to describe. Rain under a battle is a scene; rain
-  // deleted by a cheer is a fault.
+  // It went one slot for all beds (any bed killed any other — rain deleted by
+  // a cheer), then one slot per bed id (rain survives the cheer, but a second
+  // rain press killed the rain). Adrian, 2026-11-18: "someone pressing rain
+  // while its still playing from someone else's previous press should smoothly
+  // just overlap making sound keep goin on."
   //
-  // What the slot was actually protecting against is one bed stacking on
-  // ITSELF, and keying by id still does that. The ceiling is one instance per
-  // bed id, and the room-wide ambience budget decides how fast they can
-  // arrive, so the worst case is a handful of textures layered — a
-  // soundscape, not a pile-up.
-  const activeBeds = new Map<
-    SoundId,
-    { gain: GainNode; source: AudioBufferSourceNode }
-  >();
+  // He is right, and the old behaviour was worse than a cap: the press a fan
+  // made to KEEP the weather going was the press that interrupted it. Twenty
+  // seconds into a rain, somebody reaching for more rain got a quarter-second
+  // dip and a restart from the top.
+  //
+  // So nothing is stopped. The runs of one bed share a level between them —
+  // see renormalizeBed — which is what makes a second press read as the rain
+  // carrying on past where it would have ended rather than as rain getting
+  // louder. Extended, not stacked.
+  const activeBeds = new Map<SoundId, Set<BedRun>>();
   const buffers = new Map<SoundId, AudioBuffer[]>();
+  // How many takes of each id are sounding right now. Counted rather than
+  // derived, because Web Audio will not tell you: a source that has started
+  // is not enumerable, and once it ends it is gone.
+  //
+  // Absent means none — the entry is deleted rather than left at zero, so the
+  // map stays the size of what is actually playing.
+  const voices = new Map<SoundId, number>();
+  const voiceCount = (id: SoundId): number => voices.get(id) ?? 0;
   // Which buffers stop dead and therefore need a tail fade scheduled. Decided
   // once at load, where the audio is already being walked for levelling,
   // rather than on every press.
@@ -967,6 +1012,12 @@ export const createSoundBoard = (options?: {
         master = ctx.createGain();
         master.gain.value = volume;
         master.connect(ctx.destination);
+        // Whatever the dead context was playing is gone, and none of it will
+        // ever report that it ended. The bed runs go with it: their nodes
+        // belong to the context that is being thrown away, so holding on to
+        // them would have the next press share a level with silence.
+        voices.clear();
+        activeBeds.clear();
         // Buffers belong to the context that decoded them.
         buffers.clear();
         rendering = null;
@@ -1007,21 +1058,67 @@ export const createSoundBoard = (options?: {
     }
   };
 
-  const stopBed = (id: SoundId, at: number) => {
-    const running = activeBeds.get(id);
-    if (!running) return;
-    const { gain, source } = running;
-    activeBeds.delete(id);
-    try {
-      // Faded rather than cut: stopping thirty seconds of surf dead puts a
-      // click through the PA.
-      gain.gain.cancelScheduledValues(at);
-      gain.gain.setValueAtTime(gain.gain.value, at);
-      gain.gain.linearRampToValueAtTime(0.0001, at + BED_FADE_S);
-      source.stop(at + BED_FADE_S);
-    } catch {
-      // Already finished on its own.
-    }
+  // ONE BED, ONE LEVEL, HOWEVER MANY RUNS OF IT ARE OPEN.
+  //
+  // Two takes of the same rain at full gain is two rains — louder weather,
+  // not longer weather, and the fan who pressed it wanted longer. Equal power
+  // (1/sqrt(n)) holds the sum where a single run sat, so an overlap is heard
+  // as the texture continuing and not as somebody leaning on a fader.
+  //
+  // It runs on the way DOWN as well as up. A run ending hands its share back
+  // to the others, and since a bed that stops dead is already fading out over
+  // its last two seconds, the others coming up underneath it is exactly the
+  // crossfade that makes the hand-off seamless.
+  //
+  // `arriving` is the run that has only just started: its level is set
+  // outright rather than ramped, because ramping down from full gain would
+  // put a bump at the front of every overlap.
+  //
+  // `over` is how long the survivors take to move. An arrival is quick — the
+  // sum is not changing, so there is nothing to hear. A DEPARTURE is matched
+  // to the length of the departing run's own fade, so the two slopes cross
+  // and the sum holds; see retireBedRun.
+  const renormalizeBed = (
+    id: SoundId,
+    at: number,
+    arriving?: BedRun,
+    over: number = BED_FADE_S
+  ) => {
+    const runs = activeBeds.get(id);
+    if (!runs?.size) return;
+    const share = 1 / Math.sqrt(runs.size);
+    runs.forEach((run) => {
+      try {
+        if (run === arriving) {
+          run.level.gain.setValueAtTime(share, at);
+          return;
+        }
+        run.level.gain.cancelScheduledValues(at);
+        run.level.gain.setValueAtTime(run.level.gain.value, at);
+        run.level.gain.linearRampToValueAtTime(share, at + over);
+      } catch {
+        // The node belongs to a context that has gone away.
+      }
+    });
+  };
+
+  // A RUN LETS GO OF ITS SHARE, AND THE OTHERS TAKE IT UP AS IT GOES.
+  //
+  // Timing is the whole point. Waiting for `ended` to redistribute means the
+  // survivors rise AFTER the departing run is already silent, so two rains
+  // become one rain by way of a 3dB dip and then a quarter-second swell back
+  // — a fader move, which is exactly what the shared level exists to avoid.
+  // Retiring a run as its own fade STARTS, over that fade's own length, puts
+  // the two slopes on top of each other and the sum stays put.
+  //
+  // Idempotent by way of the set: `delete` tells us whether this run was
+  // still open, so the scheduled retirement and `ended` can both fire and
+  // only the first does anything.
+  const retireBedRun = (id: SoundId, run: BedRun, over: number) => {
+    const open = activeBeds.get(id);
+    if (!open?.delete(run)) return;
+    if (open.size) renormalizeBed(id, ctx?.currentTime ?? 0, undefined, over);
+    else activeBeds.delete(id);
   };
 
   const play: SoundBoard["play"] = (id, opts) => {
@@ -1039,25 +1136,69 @@ export const createSoundBoard = (options?: {
     // after arming every time, and would have muted the crowd after each
     // press while someone auditioned the panel.
     if (!opts?.force) {
-      const decision = governor.tryPlay(id, {
-        nowMs: Date.now(),
-        playing: opts?.playing ?? null,
-      });
-      lastDecision = decision;
-      if (!decision.ok) return false;
+      // BEFORE the governor, not after. tryPlay CONSUMES -- it stamps the
+      // cooldown and the budget clock as it passes -- so a voice-capped drop
+      // checked afterwards would silence the sound AND burn its slot, leaving
+      // the room quiet for the cooldown of something nobody ever heard. Same
+      // reasoning as picking the variant after governance, below.
+      if (voiceCount(id) >= MAX_VOICES_PER_SOUND) {
+        lastDecision = { ok: false, reason: "voices", retryInMs: 0 };
+        return false;
+      }
+
+      // A SUSTAIN IS NOT AN ARRIVAL.
+      //
+      // Ambience carries an 8s room-wide cooldown and an 8s density budget,
+      // and both were written about a texture ARRIVING. Pressing rain four
+      // seconds into a twenty-five second rain is not a texture arriving — it
+      // is the one already in the room being held open — and the rate limit
+      // written for the first case was quietly answering the second. The
+      // press that meant "keep it going" was dropped before it ever reached a
+      // speaker, which is most of why this looked like a one-voice board.
+      //
+      // Only this layer can tell the two apart. The governor hears the whole
+      // room, but it has clocks, not ears: it does not know what is still
+      // AUDIBLE, and a bed is the one sound long enough for the difference to
+      // matter.
+      //
+      // The RATE limits come off. The hard ones do not: `spent` is a lifetime
+      // cap and `when` is this room saying it does not want this sound right
+      // now, and neither stops being true because the sound happens to still
+      // be playing. And a sustain never CONSUMES — it stamps no clock, so
+      // holding the rain open does not push back the night's first thunder.
+      const sustaining = !!spec.bed && (activeBeds.get(id)?.size ?? 0) > 0;
+      const now = { nowMs: Date.now(), playing: opts?.playing ?? null };
+      if (sustaining) {
+        const seen = governor.check(id, now);
+        lastDecision =
+          seen.ok || seen.reason === "cooldown" || seen.reason === "budget"
+            ? { ok: true }
+            : seen;
+        if (!lastDecision.ok) return false;
+      } else {
+        const decision = governor.tryPlay(id, now);
+        lastDecision = decision;
+        if (!decision.ok) return false;
+      }
     }
 
     const at = ctx.currentTime;
-    // Only this bed's own previous run, so starting one texture never cuts a
-    // different one that is still playing.
-    if (spec.bed) stopBed(id, at);
 
     // Its own gain node, so a bed can be trimmed under the one-shots and
     // faded independently of everything else running.
     const gain = ctx.createGain();
     const trim = spec.trim ?? 1;
     gain.gain.setValueAtTime(trim, at);
-    gain.connect(master);
+    // A bed gets a second node downstream carrying its share of the bed's
+    // level, so sharing that level out never touches the schedule the tail
+    // fade lives on. One-shots have no share to carry and go straight out.
+    const level = spec.bed ? ctx.createGain() : null;
+    if (level) {
+      gain.connect(level);
+      level.connect(master);
+    } else {
+      gain.connect(master);
+    }
 
     const source = ctx.createBufferSource();
     // Picked AFTER governance, so a drop does not burn a variant: otherwise a
@@ -1070,6 +1211,38 @@ export const createSoundBoard = (options?: {
     // the tail lands on the end of the buffer rather than near it.
     source.start(at);
 
+    // ── Holding a voice, and giving it back ──────────────────────────────
+    //
+    // A forced play neither counts nor is counted against: it is the board's
+    // own voice -- the arming tone, the fanfare over a winner's name -- and
+    // the cap exists to govern the crowd. A game cue that could be starved by
+    // ten cheers, or that could starve them, would be the cap deciding
+    // something it was never asked about.
+    //
+    // RELEASED TWO WAYS, because one is not enough. onended is the honest
+    // signal and fires on a natural finish and on an explicit stop alike; the
+    // timer is the safety net for the case that has already bitten this board
+    // -- a suspended or closed context, a TV going to sleep -- where sources
+    // simply never end and the counter would creep to ten and stay there,
+    // muting the room for the rest of the night with nothing in any log.
+    // release() is idempotent, so whichever arrives first wins and the other
+    // is a no-op.
+    if (!opts?.force) {
+      voices.set(id, voiceCount(id) + 1);
+      let held = true;
+      const release = () => {
+        if (!held) return;
+        held = false;
+        const left = voiceCount(id) - 1;
+        if (left > 0) voices.set(id, left);
+        else voices.delete(id);
+      };
+      source.addEventListener("ended", release);
+      // Generous rather than exact: releasing a voice late costs one slot for
+      // a moment, releasing it early lets eleven through.
+      setTimeout(release, (buffer.duration + BED_TAIL_FADE_S + 1) * 1000);
+    }
+
     if (spec.bed) {
       // Only the beds that stop dead. Any bed, including large-crowd, whose
       // kind is `crowd` but which is mechanically the same long texture as
@@ -1077,21 +1250,45 @@ export const createSoundBoard = (options?: {
       //
       // Clamped against the buffer, so a bed shorter than the fade spends a
       // third of itself fading rather than starting already on the way out.
-      if (needsTailFade.get(buffer)) {
-        const runFor = buffer.duration;
-        const fade = Math.min(BED_TAIL_FADE_S, runFor / 3);
-        gain.gain.setValueAtTime(trim, at + runFor - fade);
+      const runFor = buffer.duration;
+      const tail = needsTailFade.get(buffer)
+        ? Math.min(BED_TAIL_FADE_S, runFor / 3)
+        : 0;
+      if (tail > 0) {
+        gain.gain.setValueAtTime(trim, at + runFor - tail);
         gain.gain.linearRampToValueAtTime(0.0001, at + runFor);
       }
 
-      const entry = { gain, source };
-      activeBeds.set(id, entry);
-      // Only clear if this is still the entry for that id — a replacement
-      // will have already taken the slot, and the outgoing run's onended
-      // (which fires after its fade) must not wipe its successor.
-      source.onended = () => {
-        if (activeBeds.get(id) === entry) activeBeds.delete(id);
-      };
+      const run: BedRun = { level: level as GainNode, source };
+      const runs = activeBeds.get(id) ?? new Set<BedRun>();
+      runs.add(run);
+      activeBeds.set(id, runs);
+      // Before it can be heard: share the level out across every run now
+      // open, this one included.
+      renormalizeBed(id, at, run);
+
+      // Each run clears only ITSELF, and what is left comes back up to fill
+      // the gap. A set means an outgoing run can no longer wipe a successor
+      // it knows nothing about.
+      //
+      // Two chances to retire, for two reasons. The TIMER is the good one: it
+      // fires as the tail fade begins, so the hand-off is a crossfade. It
+      // only exists for the recordings that stop dead, because those are the
+      // only ones whose fade this code wrote and therefore the only ones
+      // whose shape it knows.
+      //
+      // `ended` is the catch-all — a recording that fades itself out, and any
+      // run stopped by something other than reaching its end. There is no
+      // crossfade to aim at there, so the survivors rise over the length of a
+      // slow hand on a fader instead of a quarter second, which is heard as
+      // weather rather than as a level change.
+      if (tail > 0) {
+        setTimeout(
+          () => retireBedRun(id, run, tail),
+          Math.max(0, (runFor - tail) * 1000)
+        );
+      }
+      source.onended = () => retireBedRun(id, run, BED_TAIL_FADE_S);
     }
     return true;
   };
@@ -1107,6 +1304,8 @@ export const createSoundBoard = (options?: {
     isReady: () => ready,
     close: () => {
       ready = false;
+      // Those sources die with the context and their `ended` never fires.
+      voices.clear();
       activeBeds.clear();
       buffers.clear();
       ctx?.close().catch(() => {});

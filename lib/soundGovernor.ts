@@ -2,9 +2,10 @@
 // Decides whether an audience sound may actually reach the PA.
 //
 // MIRRORS src/config/soundFx.ts + src/utils/soundGovernor.ts in the
-// TellMeWhatToPlay client repo, where this logic is unit-tested. This repo has
-// no test runner, so treat that suite as the spec: if you change a number
-// here, change it there, and let its tests tell you what broke.
+// TellMeWhatToPlay client repo. Treat that suite as the spec: if you change a
+// number here, change it there, and let its tests tell you what broke. There
+// is a suite on this side too — soundGovernor.test.ts, `npm test` — covering
+// the half of the rules only this process can enforce.
 //
 // The split between the two copies is not duplication for its own sake — the
 // two sides enforce different halves of the same rules, because fans do not
@@ -22,7 +23,10 @@ import type { SoundId } from "./soundFx";
 // Sounds are filed by WHAT HAPPENS WHEN FORTY PEOPLE MASH THEM:
 //
 //   crowd    — mashing is the feature. Forty taps is a roaring room.
-//   ambience — mashing produces a bed, already handled by one-at-a-time.
+//   ambience — mashing SUSTAINS the bed it is already running: the runs
+//              overlap at a shared level, so pressing rain during rain makes
+//              the rain last longer rather than louder, and the cooldown here
+//              only governs a bed ARRIVING. See soundFx.play().
 //   hit      — mashing is annoying. Punctuation wants space.
 //   phrase   — mashing is a riot. Two spoken lines at once are neither.
 //   heckle   — one voice, and that is the whole joke. "FREEBIRD!" works
@@ -229,7 +233,16 @@ export const whenAllows = (when: SoundWhen, playing: SoundPlaying): boolean => {
 
 // --- The governor -----------------------------------------------------------
 
-export type SoundBlockReason = "cooldown" | "budget" | "spent" | "when";
+// "voices" is NOT produced by the governor. It comes from the playback engine
+// in soundFx.ts, which can run out of simultaneous voices before any rule says
+// no, and it shares this type so the operator panel has one vocabulary for
+// "why was the room quiet" rather than two.
+export type SoundBlockReason =
+  | "cooldown"
+  | "budget"
+  | "spent"
+  | "when"
+  | "voices";
 
 export type SoundDecision =
   | { ok: true }

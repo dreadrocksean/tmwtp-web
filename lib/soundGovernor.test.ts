@@ -458,3 +458,236 @@ describe('a board that fails to arm can try again', () => {
     );
   });
 });
+
+// Three mechanisms were each producing what looked like a one-voice board, and
+// only one of them was the voice count. Adrian, 2026-11-18: "someone pressing
+// rain while its still playing from someone else's previous press should
+// smoothly just overlap making sound keep goin on."
+//
+// A browser is the only place to HEAR this, so what is under test is the
+// bookkeeping it rests on: who gets refused, and what level each run is handed.
+describe('a bed press during that bed extends it', () => {
+  const SAMPLE_RATE = 44100;
+  // Short takes, so a retirement scheduled against a tail fade can be
+  // observed inside a test rather than thirty seconds after it.
+  const TAKE_S = 0.6;
+  // What the engine picks for a take this short: min(BED_TAIL_FADE_S, len/3).
+  const TAIL_S = TAKE_S / 3;
+
+  const makeParam = () => {
+    const log: string[] = [];
+    const p = {
+      value: 1,
+      log,
+      setValueAtTime(v: number, t: number) {
+        log.push(`set ${v.toFixed(4)}@${t.toFixed(3)}`);
+        p.value = v;
+        return p;
+      },
+      linearRampToValueAtTime(v: number, t: number) {
+        log.push(`ramp ${v.toFixed(4)}@${t.toFixed(3)}`);
+        p.value = v;
+        return p;
+      },
+      cancelScheduledValues() {
+        log.push('cancel');
+        return p;
+      },
+    };
+    return p;
+  };
+
+  // Every gain node the engine creates, in creation order. A bed makes two
+  // of them, trim first and level second, and the split is the whole reason a
+  // bed can overlap itself: the trim node holds a tail fade scheduled once
+  // and never touched again, while the level node is cancelled and re-ramped
+  // every time a run arrives or leaves. On one node those jobs collide.
+  //
+  // So the run just started owns the LAST node created. Identifying it by its
+  // schedule instead would miss the newest run, which has nothing to share
+  // with yet and so has never been cancelled.
+  type FakeGain = { gain: ReturnType<typeof makeParam> };
+  // Why the sound was refused. lastDecision() is null until something has
+  // been decided, which is never the case where this is used.
+  const refusedFor = (board: ReturnType<typeof createSoundBoard>) => {
+    const decided = board.lastDecision();
+    assert.ok(decided && !decided.ok, 'expected a refusal, got none');
+    return decided.reason;
+  };
+
+  const levelOf = (gains: FakeGain[]) => {
+    const node = gains[gains.length - 1];
+    assert.ok(node, 'no gain node was created');
+    return node;
+  };
+
+  const armBoard = async (
+    fn: (
+      board: ReturnType<typeof createSoundBoard>,
+      gains: FakeGain[]
+    ) => Promise<void>
+  ) => {
+    const gains: FakeGain[] = [];
+    const take = () => {
+      const data = new Float32Array(Math.round(TAKE_S * SAMPLE_RATE)).fill(0.3);
+      return {
+        duration: TAKE_S,
+        length: data.length,
+        sampleRate: SAMPLE_RATE,
+        numberOfChannels: 1,
+        getChannelData: () => data,
+      };
+    };
+    const context = {
+      state: 'running',
+      destination: {},
+      currentTime: 0,
+      createGain() {
+        const node = { gain: makeParam(), connect: () => undefined };
+        gains.push(node);
+        return node;
+      },
+      createBufferSource: () => ({
+        buffer: null,
+        onended: null,
+        connect: () => undefined,
+        start: () => undefined,
+        stop: () => undefined,
+        addEventListener: () => undefined,
+      }),
+      resume: async () => undefined,
+      close: async () => undefined,
+      decodeAudioData: async () => take(),
+    };
+
+    const g = globalThis as Record<string, unknown>;
+    const saved = {
+      AudioContext: g.AudioContext,
+      OfflineAudioContext: g.OfflineAudioContext,
+      window: g.window,
+      fetch: g.fetch,
+      error: console.error,
+    };
+    g.AudioContext = function () {
+      return context;
+    };
+    // Present, so renderAll gets past its guard, and useless, so the handful
+    // of synthesized sounds are skipped. The engine catches that per sound
+    // and logs it, which is the only reason console.error is held down here.
+    g.OfflineAudioContext = function () {
+      throw new Error('no synth under test');
+    };
+    g.window = g;
+    g.fetch = async () => ({ arrayBuffer: async () => new ArrayBuffer(8) });
+    console.error = () => undefined;
+    try {
+      const board = createSoundBoard();
+      assert.equal(await board.unlock(), true, 'board failed to arm');
+      await fn(board, gains);
+    } finally {
+      g.AudioContext = saved.AudioContext;
+      g.OfflineAudioContext = saved.OfflineAudioContext;
+      g.window = saved.window;
+      g.fetch = saved.fetch;
+      console.error = saved.error;
+    }
+  };
+
+  test('a second press is a sustain, not an arrival', async () => {
+    await armBoard(async (board) => {
+      // Ambience carries an 8s room cooldown AND an 8s density budget. Both
+      // were written about a texture arriving, and both used to refuse this.
+      assert.equal(board.play('rain'), true, 'first rain');
+      assert.equal(board.play('rain'), true, 'rain during rain');
+      assert.equal(board.play('rain'), true, 'and again');
+    });
+  });
+
+  test('a DIFFERENT bed is still an arrival, still budgeted', async () => {
+    await armBoard(async (board) => {
+      board.play('rain');
+      assert.equal(board.play('surf'), false);
+      assert.equal(refusedFor(board), 'budget');
+    });
+  });
+
+  test('with nothing of it left running it is an arrival again', async () => {
+    await armBoard(async (board) => {
+      board.play('rain');
+      // Past the take and its tail, so every run has retired.
+      await new Promise((r) => setTimeout(r, TAKE_S * 1000 + 200));
+      assert.equal(board.play('rain'), false);
+      assert.equal(refusedFor(board), 'cooldown');
+    });
+  });
+
+  test('the runs of one bed share one level', async () => {
+    await armBoard(async (board, gains) => {
+      board.play('rain');
+      const first = levelOf(gains);
+      // Alone, it gets the whole level.
+      assert.equal(first.gain.log[0], 'set 1.0000@0.000');
+
+      board.play('rain');
+      const second = levelOf(gains);
+      // Handed down as the second arrives -- 1/sqrt(2). Ramped, because a
+      // step in the level of a long wash is audible as a click.
+      assert.ok(
+        first.gain.log.some((e) => e.startsWith('ramp 0.7071')),
+        first.gain.log.join(' | ')
+      );
+      // And the newcomer opens AT its share rather than ramping down from
+      // full, which would put a bump at the front of every overlap.
+      assert.equal(second.gain.log[0], 'set 0.7071@0.000');
+    });
+  });
+
+  test('equal power: ten runs sum to where one run sat', async () => {
+    await armBoard(async (board, gains) => {
+      const runs: FakeGain[] = [];
+      for (let i = 0; i < 10; i += 1) {
+        assert.equal(board.play('rain'), true, `rain ${i + 1}`);
+        runs.push(levelOf(gains));
+      }
+      // The point of 1/sqrt(n): ten rains are as loud as one rain, so the
+      // press buys duration rather than volume. Anything else and a fan
+      // holding the weather open is leaning on the fader.
+      const power = runs.reduce((sum, r) => sum + r.gain.value ** 2, 0);
+      assert.ok(
+        Math.abs(power - 1) < 1e-9,
+        `ten runs should sum to unit power, got ${power}`
+      );
+      assert.equal(runs[9].gain.log[0], 'set 0.3162@0.000');
+    });
+  });
+
+  test('ten of the same sound is the ceiling, and only for that sound', async () => {
+    await armBoard(async (board) => {
+      let through = 0;
+      for (let i = 0; i < 30; i += 1) if (board.play('rain')) through += 1;
+      assert.equal(through, 10);
+      assert.equal(refusedFor(board), 'voices');
+      // The cap is per id. A global one would have let rain starve the room.
+      assert.equal(board.play('applause'), true);
+    });
+  });
+
+  test('a retiring run hands its share back as its own fade begins', async () => {
+    await armBoard(async (board, gains) => {
+      board.play('rain');
+      board.play('rain');
+      // Both takes are the same length here, so the first one in is the first
+      // one out and the second is what is left to come back up.
+      const survivor = levelOf(gains);
+      // Retirement is scheduled for (take - tail), so the two slopes cross.
+      // Waiting for `ended` would put a 3dB dip and then a quarter-second
+      // swell where a seamless hand-off belongs.
+      await new Promise((r) => setTimeout(r, (TAKE_S - TAIL_S) * 1000 + 150));
+      const back = survivor.gain.log.filter((e) => e.startsWith('ramp 1.0000'));
+      assert.equal(back.length, 1, survivor.gain.log.join(' | '));
+      // Over the DEPARTING run's own fade, not the shorter arrival crossfade:
+      // that is what makes the sum hold instead of dipping.
+      assert.equal(back[0], `ramp 1.0000@${TAIL_S.toFixed(3)}`);
+    });
+  });
+});
