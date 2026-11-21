@@ -476,6 +476,13 @@ const TvBoard: React.FC<TvBoardProps> = ({
     };
   }, [board.recentTip]);
 
+  // WHO IS BILLED TONIGHT. The board's own artist first -- it is their board,
+  // their photo and their code -- then anyone else confirmed on the lineup.
+  const billing = useMemo(
+    () => [board.artistName, ...board.alsoPerforming].filter(Boolean),
+    [board.artistName, board.alsoPerforming]
+  );
+
   // Audience sound effects, DARK unless the URL asks for them (?fx=1).
   //
   // The board's audio can be patched into the PA, so arming it is a decision
@@ -897,7 +904,27 @@ const TvBoard: React.FC<TvBoardProps> = ({
           if (
             fx &&
             fxAllowedRef.current &&
-            soundRef.current?.play(fx, { playing: fxPlayingRef.current })
+            // NOTHING IS REFUSED TONIGHT. Adrian, mid-show, 2026-11-21:
+            // "just for tonight, dont throttle anything. its really
+            // infuriating for the user to see a button that doesnt respond."
+            //
+            // `force` here rather than a switch inside the governor, because
+            // the governor is correct and well tested and this is a decision
+            // about one night. It is the same door `audition` and `cue`
+            // already use. The phone has the matching switch
+            // (THROTTLE_SOUNDS in the client's config/soundFx.ts) and BOTH
+            // are needed: that one gates before the write, this one before
+            // the speaker, so either alone still leaves a press that goes
+            // nowhere.
+            //
+            // The cost, and it is real: a forced play is not RECORDED, so
+            // the governor's clocks do not advance while this is on. Turning
+            // it back off starts the room from a clean slate rather than
+            // mid-cooldown, which is the harmless direction.
+            soundRef.current?.play(fx, {
+              playing: fxPlayingRef.current,
+              force: true,
+            })
           ) {
             playedFx = fx;
             // Credit only what actually reached the room. A governed drop
@@ -1003,8 +1030,25 @@ const TvBoard: React.FC<TvBoardProps> = ({
                 Live
               </span>
             )}
-            <h1 className="min-w-0 truncate text-[clamp(1.75rem,4.6vw,6rem)] font-bold uppercase leading-none">
-              {board.artistName}
+            {/* BOTH NAMES ON A PAIRED NIGHT. Adrian, 2026-11-21: "in the
+                event of a paired show, show both artists name on the board."
+
+                One line with an ampersand rather than a stack: these are two
+                people billed together, not a headliner and a support, and
+                the second name dropping to its own smaller line would say
+                the opposite. `truncate` goes with it -- two names will not
+                fit on one line of a heading this size, and cutting the
+                second one off mid-word is worse than letting it wrap. It
+                keeps `truncate` on the solo case, where it was earning its
+                place against a long single name. */}
+            <h1
+              className={
+                billing.length > 1
+                  ? "min-w-0 text-[clamp(1.4rem,3.6vw,4.6rem)] font-bold uppercase leading-[1.05]"
+                  : "min-w-0 truncate text-[clamp(1.75rem,4.6vw,6rem)] font-bold uppercase leading-none"
+              }
+            >
+              {billing.join(" & ")}
             </h1>
           </div>
         </header>

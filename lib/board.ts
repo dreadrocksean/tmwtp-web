@@ -61,6 +61,16 @@ export interface BoardSupporter {
 export interface Board {
   artistId: string;
   artistName: string;
+  // THE REST OF TONIGHT'S LINEUP, by name, confirmed only.
+  //
+  // A dueling night is two FULL artists sharing a room, and a board carrying
+  // one of their names tells the room half the truth about who is playing.
+  // Empty on every ordinary show, which is nearly all of them.
+  //
+  // The Cloud Function filters this to artists who have SAID YES -- a name
+  // with no answer is pending, and a six-foot screen is the last place to
+  // announce somebody who has not agreed to the gig.
+  alsoPerforming: string[];
   // The artist's profile photo. Already public — it is what fans see in the
   // app — and it is the one thing that makes a board look like THIS band's
   // rather than the product's.
@@ -82,6 +92,11 @@ export interface Board {
 export const toBoard = (data: Record<string, any>): Board => ({
   artistId: String(data.artistId ?? ""),
   artistName: String(data.artistName ?? ""),
+  // Tolerant of boards written before this field existed, which read as an
+  // ordinary one-artist show -- exactly what they were.
+  alsoPerforming: Array.isArray(data.alsoPerforming)
+    ? data.alsoPerforming.filter((n: unknown) => !!n).map(String)
+    : [],
   artistImageURL:
     typeof data.artistImageURL === "string" && data.artistImageURL
       ? data.artistImageURL

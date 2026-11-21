@@ -625,8 +625,12 @@ describe('a bed press during that bed extends it', () => {
     await armBoard(async (board, gains) => {
       board.play('rain');
       const first = levelOf(gains);
-      // Alone, it gets the whole level.
-      assert.equal(first.gain.log[0], 'set 1.0000@0.000');
+      // Alone, it gets the whole level -- arrived at over BED_RISE_S rather
+      // than switched on. This is the case the fade exists for: the first
+      // press of ambience in a quiet room, which used to begin at full on a
+      // step edge and read as a fault in the PA rather than as weather.
+      assert.equal(first.gain.log[0], 'set 0.0001@0.000');
+      assert.equal(first.gain.log[1], 'ramp 1.0000@1.200');
 
       board.play('rain');
       const second = levelOf(gains);
@@ -636,9 +640,13 @@ describe('a bed press during that bed extends it', () => {
         first.gain.log.some((e) => e.startsWith('ramp 0.7071')),
         first.gain.log.join(' | ')
       );
-      // And the newcomer opens AT its share rather than ramping down from
-      // full, which would put a bump at the front of every overlap.
-      assert.equal(second.gain.log[0], 'set 0.7071@0.000');
+      // And the newcomer FADES UP to its share from silence rather than
+      // appearing at it. It used to open at its share, which was right while
+      // the alternative was ramping down from full -- that put a bump at the
+      // front of every overlap -- but wrong once ambience is meant to arrive
+      // rather than simply be there. See BED_RISE_S.
+      assert.equal(second.gain.log[0], 'set 0.0001@0.000');
+      assert.equal(second.gain.log[1], 'ramp 0.7071@1.200');
     });
   });
 
@@ -657,7 +665,11 @@ describe('a bed press during that bed extends it', () => {
         Math.abs(power - 1) < 1e-9,
         `ten runs should sum to unit power, got ${power}`
       );
-      assert.equal(runs[9].gain.log[0], 'set 0.3162@0.000');
+      // Each run still LANDS on its share; it just gets there over
+      // BED_RISE_S now. The power sum above is unchanged because that is
+      // measured where the ramp ends, which is where the weather settles.
+      assert.equal(runs[9].gain.log[0], 'set 0.0001@0.000');
+      assert.equal(runs[9].gain.log[1], 'ramp 0.3162@1.200');
     });
   });
 

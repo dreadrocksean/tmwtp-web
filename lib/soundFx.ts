@@ -119,6 +119,31 @@ interface SoundSpec {
 // Beds are trimmed to this under the levelled target.
 const BED_TRIM = 0.55;
 
+// Decibels, because that is the unit a level is judged in at a desk. -4dB is
+// 0.63 of the amplitude and -5dB is 0.56; writing the figure rather than the
+// ratio means the next adjustment is the number someone actually says.
+const dB = (value: number): number => Math.pow(10, value / 20);
+
+// Adrian, at a live show, 2026-11-21: "Applause is too loud. bring down 4db"
+// and "Shhhh ios too loud. reduce by 5db." Levelling put every one-shot on
+// one target, which is right for peak and wrong for how loud a thing FEELS:
+// a two-second wall of hands and a close sibilant both measure the same and
+// neither sits where it should next to a band.
+const APPLAUSE_TRIM = dB(-4);
+const SHH_TRIM = dB(-5);
+
+// HOW LONG A BED TAKES TO ARRIVE. Adrian, 2026-11-21: "sfx ambience should
+// fade up."
+//
+// An arriving run used to be set to its share instantly while every other
+// run crossfaded, which is backwards: the one sound in the room that is
+// meant to be WEATHER was the only one that began on a step edge. Rain that
+// is simply there is a fault in the PA; rain that comes in is rain.
+//
+// Shorter than the tail. Weather arrives faster than it leaves, and a fan
+// who pressed it needs to hear that something happened.
+const BED_RISE_S = 1.2;
+
 // The crossfade used when a bed's level is shared out — a second run of the
 // same bed arriving, or one of them ending and handing its share back.
 //
@@ -267,6 +292,7 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
   applause: {
     label: "Applause",
     seconds: 2.8,
+    trim: APPLAUSE_TRIM,
     render: (ctx) => {
       const claps = burstSource(ctx, {
         seconds: 2.8,
@@ -322,6 +348,7 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
   shh: {
     label: "Shhhhh",
     seconds: 1.5,
+    trim: SHH_TRIM,
     render: (ctx) => {
       const noise = noiseSource(ctx, 1.5, 23);
       const bp = ctx.createBiquadFilter();
@@ -1090,7 +1117,9 @@ export const createSoundBoard = (options?: {
     runs.forEach((run) => {
       try {
         if (run === arriving) {
-          run.level.gain.setValueAtTime(share, at);
+          // From silence, over BED_RISE_S. Not from `share` -- see above.
+          run.level.gain.setValueAtTime(0.0001, at);
+          run.level.gain.linearRampToValueAtTime(share, at + BED_RISE_S);
           return;
         }
         run.level.gain.cancelScheduledValues(at);
