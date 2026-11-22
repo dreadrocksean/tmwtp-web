@@ -497,8 +497,20 @@ const TvBoard: React.FC<TvBoardProps> = ({
   // WHO IS BILLED TONIGHT. The board's own artist first -- it is their board,
   // their photo and their code -- then anyone else confirmed on the lineup.
   const billing = useMemo(
-    () => [board.artistName, ...board.alsoPerforming].filter(Boolean),
-    [board.artistName, board.alsoPerforming]
+    () =>
+      // THE NAME THE ROOM WAS GIVEN, when there is one.
+      //
+      // Adrian, 2026-11-22: "board doesnt show the correct duo name." The
+      // wall joined the act names itself, so a pair announced as "Key & Kin"
+      // from the stage read as two names up there — the one surface where
+      // the billing is supposed to match what the room just heard.
+      //
+      // Falls back to joining the names, which is every solo show and every
+      // pair that never named itself.
+      board.duoName
+        ? [board.duoName]
+        : [board.artistName, ...board.alsoPerforming].filter(Boolean),
+    [board.duoName, board.artistName, board.alsoPerforming]
   );
 
   // Audience sound effects, ON by default.

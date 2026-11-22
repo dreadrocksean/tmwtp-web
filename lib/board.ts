@@ -71,6 +71,9 @@ export interface Board {
   // with no answer is pending, and a six-foot screen is the last place to
   // announce somebody who has not agreed to the gig.
   alsoPerforming: string[];
+  // What the pair is billed as, when the host chose something. Null on a
+  // solo show and on a pair that never named itself.
+  duoName: string | null;
   // The artist's profile photo. Already public — it is what fans see in the
   // app — and it is the one thing that makes a board look like THIS band's
   // rather than the product's.
@@ -94,6 +97,10 @@ export const toBoard = (data: Record<string, any>): Board => ({
   artistName: String(data.artistName ?? ""),
   // Tolerant of boards written before this field existed, which read as an
   // ordinary one-artist show -- exactly what they were.
+  duoName:
+    typeof data.duoName === 'string' && data.duoName.trim()
+      ? data.duoName.trim()
+      : null,
   alsoPerforming: Array.isArray(data.alsoPerforming)
     ? data.alsoPerforming.filter((n: unknown) => !!n).map(String)
     : [],
