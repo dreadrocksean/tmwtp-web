@@ -55,8 +55,8 @@ const TvBoardPage = async ({ params, searchParams }: TvPageProps) => {
     // was already in exact ABC-123 form. Typing the code without its dash
     // sent you to the canonical URL stripped of every flag:
     //
-    //   /2TZQYS?fx=0  ->  /tv/2TZ-QYS     the flag is gone
-    //   /2TZ-QYS?fx=0 ->  stays put       the flag is kept
+    //   /2TZQYS?fx=1  ->  /tv/2TZ-QYS     the flag is gone
+    //   /2TZ-QYS?fx=1 ->  stays put       the flag is kept
     //
     // Which meant a board behaved differently depending on a punctuation mark
     // nobody can see in the result, with nothing on screen to say so. Found

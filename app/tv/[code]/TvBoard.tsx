@@ -518,8 +518,15 @@ const TvBoard: React.FC<TvBoardProps> = ({
   // pill already distinguishes from a locked context. So the flag was asking
   // the engineer to remember something the artist can already decide.
   //
-  // `?fx=0` still forces a silent screen, which is what the room's own
-  // display wants when the engineer is running audio from a second laptop.
+  // THERE IS NO WAY TO TURN IT OFF FROM THE URL, on purpose.
+  //
+  // A `?fx=0` escape hatch shipped with this and lasted a few minutes.
+  // Adrian asked what the benefit was, and there wasn't one worth the
+  // hazard: the only real case was two screens showing the same board where
+  // only one should make noise, and a bookmarked ?fx=0 would silently mute a
+  // board — the exact failure just removed in the other direction, pointing
+  // the other way. The control that belongs to the artist already exists on
+  // the show doc, and the listener below honours it.
   const [fxOn, setFxOn] = useState(false);
   // THE ENGINEER'S DESK IS STILL BEHIND ?fx=1, and must stay there.
   //
@@ -539,10 +546,11 @@ const TvBoard: React.FC<TvBoardProps> = ({
   const [lastFx, setLastFx] = useState("none");
 
   useEffect(() => {
-    const fxParam = new URLSearchParams(window.location.search).get("fx");
-    // The one screen that wants to stay silent says so explicitly.
-    if (fxParam === "0") return;
-    setDeskOn(fxParam === "1");
+    // ?fx=1 still opens the engineer's desk. It no longer has any say over
+    // whether the board makes a noise.
+    setDeskOn(
+      new URLSearchParams(window.location.search).get("fx") === "1"
+    );
     setFxOn(true);
     const sounds = createSoundBoard();
     soundRef.current = sounds;
