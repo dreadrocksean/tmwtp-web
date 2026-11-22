@@ -447,6 +447,8 @@ const TvBoard: React.FC<TvBoardProps> = ({
   const revealedRef = useRef<string | null>(null);
   const revealPrimedRef = useRef(false);
   const fanfareTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Hides the Top-5 entrant card. A ref, not effect cleanup -- see below.
+  const entrantTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // GongSong. Same priming discipline as the winner takeover and for the same
   // reason: a board opened or reloaded inside the 45s an outcome stays on the
   // doc would otherwise strike the gong for a song that was already gonged
@@ -474,7 +476,23 @@ const TvBoard: React.FC<TvBoardProps> = ({
       clearTimeout(hideConfetti);
       clearTimeout(hideBanner);
     };
-  }, [board.recentTip]);
+    // THE ID, NOT THE OBJECT. Adrian, after the 2026-11-21 show: "the board
+    // keeps getting blurred in full screen... had to keep reloading."
+    //
+    // This splash dims and blurs the entire wall, and it hid itself with a
+    // timer returned from this effect's cleanup. `board.recentTip` is a fresh
+    // object on every snapshot, and the listener's 15s polling backstop calls
+    // setBoard unconditionally -- new identity four times a minute even when
+    // not one byte changed. So within 15s of any tip the effect re-ran, its
+    // cleanup CLEARED the hide timer, and the re-run hit the
+    // `id === lastTipRef.current` guard above and scheduled nothing to
+    // replace it. An 8s banner against a 15s poll meant the blur stuck more
+    // often than not, for the rest of the night, and only a reload cleared it.
+    //
+    // Depending on the id means the effect re-runs only when the tip genuinely
+    // changes -- and there, cancelling the previous tip's timers is exactly
+    // what should happen.
+  }, [board.recentTip?.id]);
 
   // WHO IS BILLED TONIGHT. The board's own artist first -- it is their board,
   // their photo and their code -- then anyone else confirmed on the lineup.
@@ -980,9 +998,29 @@ const TvBoard: React.FC<TvBoardProps> = ({
     seenRef.current = new Set(ids);
     if (!fresh) return;
     setEntrant(fresh);
-    const timer = setTimeout(() => setEntrant(null), 6000);
-    return () => clearTimeout(timer);
+    // THE TIMER OUTLIVES THE EFFECT, on purpose.
+    //
+    // Same failure as the tip splash above, and it cannot be fixed the same
+    // way: there is no primitive to depend on, because the trigger is "a song
+    // appeared that was not here before" and that is a comparison against a
+    // ref, not a value. `board.songs` is a new array on every snapshot, so
+    // returning `clearTimeout` as cleanup meant the next poll killed the hide
+    // and the early return above scheduled no replacement -- the entrant card
+    // sat on the wall permanently.
+    //
+    // Held in a ref and replaced rather than stacked, so a second entrant
+    // restarts the 6s rather than being hidden by the first one's timer.
+    if (entrantTimer.current) clearTimeout(entrantTimer.current);
+    entrantTimer.current = setTimeout(() => setEntrant(null), 6000);
   }, [board.songs]);
+
+  // Only on the way out. Nothing above may clear this timer on a re-render.
+  useEffect(
+    () => () => {
+      if (entrantTimer.current) clearTimeout(entrantTimer.current);
+    },
+    []
+  );
 
   const subtitle = [board.venueName, board.showTitle]
     .filter(Boolean)
