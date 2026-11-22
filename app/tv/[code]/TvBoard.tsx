@@ -501,14 +501,36 @@ const TvBoard: React.FC<TvBoardProps> = ({
     [board.artistName, board.alsoPerforming]
   );
 
-  // Audience sound effects, DARK unless the URL asks for them (?fx=1).
+  // Audience sound effects, ON by default.
   //
-  // The board's audio can be patched into the PA, so arming it is a decision
-  // someone makes for a moment on a particular night — not something every
-  // board in the country inherits because this file shipped. The artist-facing
-  // control and the per-sound picks come next; this is the mechanism, landed
-  // behind a flag, the same way the region gate went in.
+  // This shipped dark behind ?fx=1 while the mechanism was unproven, on the
+  // reasoning that board audio can be patched into a PA and so should be a
+  // per-night decision rather than something every board inherits. In
+  // practice that made the feature invisible: Adrian, 2026-11-22, "the sound
+  // didnt work at all last night" — the board was opened on the plain URL, so
+  // no audio engine was ever created, and a board with the flag missing looks
+  // exactly like a board whose fans are not pressing anything. Two sounds
+  // were sent across a two-hour show and neither could have been heard.
+  //
+  // The opt-out it was protecting already exists, one level up and in the
+  // right hands: the artist can mute the room for a show (`soundFx: false` on
+  // the show doc), which the listener below already honours and the status
+  // pill already distinguishes from a locked context. So the flag was asking
+  // the engineer to remember something the artist can already decide.
+  //
+  // `?fx=0` still forces a silent screen, which is what the room's own
+  // display wants when the engineer is running audio from a second laptop.
   const [fxOn, setFxOn] = useState(false);
+  // THE ENGINEER'S DESK IS STILL BEHIND ?fx=1, and must stay there.
+  //
+  // Arming the audio everywhere is not the same as putting a control panel on
+  // a six-foot screen that is left up all night with an audience in front of
+  // it — that is burn-in and something to poke. The desk (armed/muted status
+  // plus the audition panel) is one person's tool on one laptop. What DOES
+  // render on every board is the press-to-enable button, and only while the
+  // browser is still blocking audio: without it "on by default" means nothing
+  // wherever autoplay is refused, and it takes itself away once pressed.
+  const [deskOn, setDeskOn] = useState(false);
   const [soundReady, setSoundReady] = useState(false);
   const soundRef = useRef<SoundBoard | null>(null);
   // Surfaced for tests: a sound leaves no trace on the screen, so without this
@@ -517,7 +539,10 @@ const TvBoard: React.FC<TvBoardProps> = ({
   const [lastFx, setLastFx] = useState("none");
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("fx") !== "1") return;
+    const fxParam = new URLSearchParams(window.location.search).get("fx");
+    // The one screen that wants to stay silent says so explicitly.
+    if (fxParam === "0") return;
+    setDeskOn(fxParam === "1");
     setFxOn(true);
     const sounds = createSoundBoard();
     soundRef.current = sounds;
@@ -1587,7 +1612,9 @@ const TvBoard: React.FC<TvBoardProps> = ({
           now — audio that has silently fallen back to locked after a TV sleep
           looks identical to a quiet crowd, and the bit flops with nobody
           knowing why. */}
-      {fxOn && (
+      {/* Nothing here once sound is working, unless this is the desk. A wall
+          display earns a permanent badge only while something needs doing. */}
+      {fxOn && (!soundReady || deskOn) && (
         <div className="fixed right-[1.2vw] top-[1.2vw] z-30 flex flex-col items-end gap-[0.6vw]">
           {soundReady ? (
             <>
@@ -1605,9 +1632,9 @@ const TvBoard: React.FC<TvBoardProps> = ({
               )}
               {/* Set the gain before doors, not during a ballad.
 
-                  Nobody in the room ever sees this: ?fx=1 gates the sound
-                  board and this panel together, so the screen the audience
-                  watches has neither. It is one person's tool on one laptop.
+                  Nobody in the room ever sees this: ?fx=1 gates the desk,
+                  so the screen the audience watches has the audio but not
+                  this. It is one person's tool on one laptop.
 
                   Folded away regardless, for that person's sake. Seventeen
                   buttons in a flex-wrap row was a wall with no order to scan,

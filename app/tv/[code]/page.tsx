@@ -22,6 +22,9 @@ const SITE = "https://www.tellmewhat2play.com";
 
 interface TvPageProps {
   params: { code: string };
+  // Carried through the canonical redirect below. Without this the redirect
+  // rebuilds the URL from the path alone and every flag on it disappears.
+  searchParams?: Record<string, string | string[] | undefined>;
 }
 
 export const generateMetadata = async ({
@@ -35,7 +38,7 @@ export const generateMetadata = async ({
   };
 };
 
-const TvBoardPage = async ({ params }: TvPageProps) => {
+const TvBoardPage = async ({ params, searchParams }: TvPageProps) => {
   const code = normalizeBoardCode(decodeCodeParam(params.code));
   // Nothing usable in the URL at all — show the help screen rather than
   // redirecting to an equally empty one.
@@ -44,7 +47,28 @@ const TvBoardPage = async ({ params }: TvPageProps) => {
   // Settle on one spelling (ABC-123) so a venue that bookmarks the page, or
   // casts it from history, always lands on the same URL.
   const displayCode = formatBoardCode(code);
-  if (params.code !== displayCode) redirect(`/tv/${displayCode}`);
+  if (params.code !== displayCode) {
+    // THE QUERY STRING SURVIVES THE REDIRECT.
+    //
+    // This was built from the path alone, so anything after the ? was thrown
+    // away silently — and whether it happened depended on whether the code
+    // was already in exact ABC-123 form. Typing the code without its dash
+    // sent you to the canonical URL stripped of every flag:
+    //
+    //   /2TZQYS?fx=0  ->  /tv/2TZ-QYS     the flag is gone
+    //   /2TZ-QYS?fx=0 ->  stays put       the flag is kept
+    //
+    // Which meant a board behaved differently depending on a punctuation mark
+    // nobody can see in the result, with nothing on screen to say so. Found
+    // 2026-11-22 while working out why the sound never came on.
+    const qs = new URLSearchParams();
+    Object.entries(searchParams ?? {}).forEach(([key, value]) => {
+      if (Array.isArray(value)) value.forEach((one) => qs.append(key, one));
+      else if (value !== undefined) qs.set(key, value);
+    });
+    const search = qs.toString();
+    redirect(`/tv/${displayCode}${search ? `?${search}` : ""}`);
+  }
 
   const board = await getBoardByCode(code);
   if (!board) return <BoardNotFound entered={displayCode} />;
