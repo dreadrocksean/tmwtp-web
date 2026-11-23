@@ -225,12 +225,28 @@ const PhraseTicker: React.FC<{ phrase: ShowPhrase }> = ({ phrase }) => {
     // The phrase ITSELF is the dependency: new words, new width.
   }, [phrase.text, phrase.amountCents]);
 
-  // One copy of the words, with the price leading, exactly as the static
-  // version had it.
+  // One copy of the words: the price leads, and the author rides along at the
+  // end of the same line.
+  //
+  // Adrian, 2026-11-23: "have the author just next to it in line with the
+  // bottom of the font, '- [display name]' and scrolling along with it."
+  //
+  // It used to be a separate static line underneath, which meant the credit
+  // sat still while the words it belonged to travelled away from it -- on a
+  // long phrase the name was attached to nothing. Inline, it is part of the
+  // sentence and goes where the sentence goes.
+  //
+  // BASELINE, not centre. These are inline spans in one line box, so they sit
+  // on a shared baseline by default -- which is "in line with the bottom of
+  // the font" and is why no vertical-align is needed here. Setting one would
+  // break it.
   const copy = (
     <>
       <span className="text-lime">{dollars(phrase.amountCents)}</span>{" "}
-      {phrase.text}
+      {phrase.text}{" "}
+      <span className="text-[clamp(0.7rem,1.5vw,2rem)] text-cyan">
+        {`- ${phrase.name}`}
+      </span>
     </>
   );
 
@@ -316,11 +332,8 @@ const PhraseStrip: React.FC<{
         )}
       </div>
 
-      {phrase && (
-        <p className="mt-[0.7vw] text-center text-[clamp(0.7rem,1.5vw,2rem)] leading-none text-cyan">
-          {phrase.name}
-        </p>
-      )}
+      {/* No standing credit line any more -- the name travels with the words
+          it belongs to. See the note in PhraseTicker. */}
     </div>
   );
 };
