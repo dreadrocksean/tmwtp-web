@@ -577,3 +577,42 @@ body::-webkit-scrollbar-thumb {
 .tv-phrase-in {
   animation: tvPhraseIn 0.75s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
 }
+
+/* ── THE PHRASE RUNS ACROSS THE WALL ───────────────────────────────────────
+ *
+ * Adrian, 2026-11-23: "the potn should ticker tape across the board like it
+ * does on the devices."
+ *
+ * The same rule as PhraseStrip in the app, and it is worth restating because
+ * it is the whole reason this loops cleanly at any phrase length: TWO copies,
+ * with a gap of exactly ONE VIEWPORT between them. The tail of a copy clears
+ * the left edge at -W; the head of the next touches the right edge at
+ * V - (W + G). Those are the same instant only when G equals V -- so the
+ * phrase leaves and arrives in the same frame, with no overlap and no dead
+ * air, however long it is and however wide the screen.
+ *
+ * `--tv-ticker-distance` is W + V and `--tv-ticker-seconds` is set from it by
+ * the component, because CSS cannot measure text.
+ */
+@keyframes tvPhraseTicker {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(calc(var(--tv-ticker-distance, 0px) * -1), 0, 0);
+  }
+}
+
+.tv-phrase-ticker {
+  animation: tvPhraseTicker var(--tv-ticker-seconds, 14s) linear infinite;
+  will-change: transform;
+}
+
+/* A wall nobody asked to animate. The phrase still has to be readable, so it
+ * sits still rather than disappearing -- the app makes the same choice. */
+@media (prefers-reduced-motion: reduce) {
+  .tv-phrase-ticker {
+    animation: none;
+    transform: none;
+  }
+}

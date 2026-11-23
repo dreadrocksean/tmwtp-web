@@ -164,6 +164,110 @@ const RevealedTitle: React.FC<{ text: string }> = ({ text }) => (
   </span>
 );
 
+// ── THE PHRASE RUNS ACROSS THE WALL ─────────────────────────────────────────
+//
+// Adrian, 2026-11-23: "the potn should ticker tape across the board like it
+// does on the devices."
+//
+// Lifted from PhraseStrip in the app, including the one rule that makes it
+// loop cleanly at any length: TWO copies with a gap of exactly ONE VIEWPORT
+// between them. The tail of a copy clears the left edge at -W; the head of
+// the next touches the right edge at V - (W + G). Those are the same instant
+// only when G equals V, so the phrase leaves and arrives in the same frame --
+// no overlap, no dead air, whatever the phrase and whatever the screen.
+//
+// SPEED IS NOT COPIED, THE FEEL IS. The app runs at 45pt/s on a ~390pt phone,
+// which is 8.7 seconds to cross one screen's width. Carried over as px/s that
+// would crawl on a 1920px wall, so the TIME PER SCREEN WIDTH is what travels
+// instead -- a lap reads the same on a phone and on a projector.
+const TICKER_SECONDS_PER_SCREEN = 8.7;
+
+const PhraseTicker: React.FC<{ phrase: ShowPhrase }> = ({ phrase }) => {
+  const viewRef = useRef<HTMLDivElement | null>(null);
+  const runRef = useRef<HTMLSpanElement | null>(null);
+  const [{ distance, seconds, gap }, setRun] = useState({
+    distance: 0,
+    seconds: 0,
+    gap: 0,
+  });
+
+  // Measured, not computed. The phrase is somebody else's words in a variable
+  // font at a vw-derived size, so its width is not something to predict.
+  useEffect(() => {
+    const view = viewRef.current;
+    const run = runRef.current;
+    if (!view || !run) return undefined;
+
+    const measure = () => {
+      const v = view.clientWidth;
+      const w = run.scrollWidth;
+      if (!v || !w) return;
+      const d = w + v;
+      // The gap is carried in PIXELS, not as `100%`. A percentage margin on a
+      // flex item resolves against the flex CONTAINER's width, and this
+      // container is inline-flex -- its width comes from its content, so the
+      // percentage is circular and engine-dependent. The number is measured
+      // right here; there is no reason to make the browser guess it.
+      setRun({
+        distance: d,
+        seconds: (TICKER_SECONDS_PER_SCREEN * d) / v,
+        gap: v,
+      });
+    };
+    measure();
+
+    // A board is bookmarked and left for hours; it is also resized by a venue
+    // fiddling with display settings, and the font may land after first paint.
+    const ro = new ResizeObserver(measure);
+    ro.observe(view);
+    ro.observe(run);
+    return () => ro.disconnect();
+    // The phrase ITSELF is the dependency: new words, new width.
+  }, [phrase.text, phrase.amountCents]);
+
+  // One copy of the words, with the price leading, exactly as the static
+  // version had it.
+  const copy = (
+    <>
+      <span className="text-lime">{dollars(phrase.amountCents)}</span>{" "}
+      {phrase.text}
+    </>
+  );
+
+  return (
+    <div ref={viewRef} className="overflow-hidden">
+      <div
+        className={distance > 0 ? "tv-phrase-ticker inline-flex" : "inline-flex"}
+        style={
+          distance > 0
+            ? ({
+                "--tv-ticker-distance": `${distance}px`,
+                "--tv-ticker-seconds": `${seconds}s`,
+              } as React.CSSProperties)
+            : undefined
+        }
+      >
+        {/* The first copy is the one that gets measured; the second only ever
+            trails it, so it is hidden from a screen reader. */}
+        <span
+          ref={runRef}
+          className="whitespace-nowrap text-[clamp(1.4rem,4.6vw,6.2rem)] font-bold uppercase leading-[1.05] text-white"
+        >
+          {copy}
+        </span>
+        <span
+          aria-hidden
+          className="whitespace-nowrap text-[clamp(1.4rem,4.6vw,6.2rem)] font-bold uppercase leading-[1.05] text-white"
+          // The gap IS the viewport, in measured pixels. See the note above.
+          style={{ marginLeft: `${gap}px` }}
+        >
+          {copy}
+        </span>
+      </div>
+    </div>
+  );
+};
+
 // The wall's standing phrase, and the moment it changes hands.
 //
 // Permanent real estate rather than a banner: the tip announcement is
@@ -206,13 +310,9 @@ const PhraseStrip: React.FC<{
           </p>
         )}
         {phrase && (
-          <p
-            key={`in-${phraseKey(phrase)}`}
-            className="tv-phrase-in relative break-words text-center text-[clamp(1.4rem,4.6vw,6.2rem)] font-bold uppercase leading-[1.05] text-white"
-          >
-            <span className="text-lime">{dollars(phrase.amountCents)}</span>{" "}
-            {phrase.text}
-          </p>
+          <div key={`in-${phraseKey(phrase)}`} className="tv-phrase-in relative">
+            <PhraseTicker phrase={phrase} />
+          </div>
         )}
       </div>
 
