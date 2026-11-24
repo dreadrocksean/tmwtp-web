@@ -26,7 +26,7 @@
 // it keeps that correctness from depending on anyone remembering to re-prime
 // the next ref somebody adds to that file.
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
 
 import { db } from "@/lib/gcp/client";
@@ -34,6 +34,7 @@ import { Board, formatBoardCode, normalizeBoardCode, toBoard } from "@/lib/board
 import { STAGE_COLLECTION, toStagePointer } from "@/lib/stage";
 import type { StageTarget } from "@/lib/gcp/stage";
 import TvBoard from "../../[code]/TvBoard";
+import { useSound } from "../../[code]/SoundHost";
 
 interface StageBoardProps {
   slug: string;
@@ -54,6 +55,39 @@ export const StageBoard: React.FC<StageBoardProps> = ({
   );
   const [code, setCode] = useState<string | null>(initialTarget?.code ?? null);
   const [board, setBoard] = useState<Board | null>(initialBoard);
+
+  // Borrowed for the holding screen's own setup buttons — see the note where
+  // it renders. The board below gets the same engine from the same host.
+  const { soundReady, enableSound } = useSound();
+
+  // Full screen, duplicated from the board for the holding screen only.
+  // documentElement, exactly as the board requests it, which is what lets the
+  // grant survive every later swap.
+  const [fsAvailable, setFsAvailable] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const d = document as Document & { webkitFullscreenElement?: Element };
+    const el = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => void;
+    };
+    setFsAvailable(!!(el.requestFullscreen || el.webkitRequestFullscreen));
+    const sync = () =>
+      setIsFullscreen(!!(d.fullscreenElement || d.webkitFullscreenElement));
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+    };
+  }, []);
+  const enterFullscreen = useCallback(() => {
+    const el = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => void;
+    };
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else el.webkitRequestFullscreen?.();
+  }, []);
 
   // WHO THE HOST HAS CHOSEN. One document, watched for the night.
   useEffect(() => {
@@ -124,6 +158,13 @@ export const StageBoard: React.FC<StageBoardProps> = ({
   // sits before the first act of the night. Deliberately quiet: a venue
   // leaves this up for an hour before doors, so it must not look broken and
   // must not burn a bright panel into a plasma.
+  //
+  // IT CARRIES THE TWO SETUP BUTTONS, which is not decoration. This screen
+  // renders INSTEAD of the board, so without them the one state a venue is
+  // in while setting up — TVs on, nobody picked yet — is the one state where
+  // full screen and sound cannot be armed. That turns "arm the screens
+  // whenever" into "arm them only after picking an act", which is exactly the
+  // kind of ordering rule that gets discovered at 7:45pm.
   if (!code || !board) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-bg px-[max(16px,env(safe-area-inset-left,0px))] text-center text-cyan">
@@ -133,6 +174,26 @@ export const StageBoard: React.FC<StageBoardProps> = ({
         <p className="mt-[1.2vw] text-[clamp(0.85rem,1.6vw,2rem)] leading-tight">
           Waiting for the next act.
         </p>
+
+        {!soundReady && (
+          <button
+            type="button"
+            onClick={enableSound}
+            className="mt-[3vw] rounded-full border border-rose/50 bg-rose/20 px-[1.4vw] py-[0.6vw] text-[clamp(0.6rem,1vw,1.2rem)] font-bold uppercase tracking-[0.2em] leading-none text-rose focus:outline-none focus-visible:ring-[0.25vw] focus-visible:ring-lime"
+          >
+            🔇 Press to enable sound
+          </button>
+        )}
+
+        {fsAvailable && !isFullscreen && (
+          <button
+            type="button"
+            onClick={enterFullscreen}
+            className="fixed bottom-[1vw] left-[1.2vw] z-30 rounded-full border border-cyan/40 bg-bg-overly/80 px-[1vw] py-[0.4vw] text-[clamp(0.5rem,0.8vw,1rem)] font-bold uppercase tracking-[0.2em] leading-none text-cyan hover:text-white focus:outline-none focus-visible:ring-[0.25vw] focus-visible:ring-lime"
+          >
+            ⛶ Full screen
+          </button>
+        )}
       </main>
     );
   }
