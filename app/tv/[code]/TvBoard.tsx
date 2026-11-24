@@ -28,13 +28,12 @@ import {
 } from "@/lib/game";
 import { ShowPhrase, dollars, phraseKey, toShowPhrase } from "@/lib/phrase";
 import {
-  createSoundBoard,
   isFanSoundId,
   SOUND_LIST,
   isGameCue,
-  SoundBoard,
   SoundId,
 } from "@/lib/soundFx";
+import { useSound } from "./SoundHost";
 import {
   BRIGHT_VISUALS,
   VISUAL_GAP_MS,
@@ -663,8 +662,22 @@ const TvBoard: React.FC<TvBoardProps> = ({
   // browser is still blocking audio: without it "on by default" means nothing
   // wherever autoplay is refused, and it takes itself away once pressed.
   const [deskOn, setDeskOn] = useState(false);
-  const [soundReady, setSoundReady] = useState(false);
-  const soundRef = useRef<SoundBoard | null>(null);
+  // THE ENGINE LIVES ABOVE THIS COMPONENT. See SoundHost.
+  //
+  // It used to be created here, which was right while a board showed one
+  // artist all night. A screen that can be re-pointed at another act WANTS
+  // this component to remount on the swap — every "is this news?" ref below
+  // (the seen set, the last tip, the last gong, the game winner, the phrase
+  // key) holds the previous artist's state, and a remount is the only way to
+  // reset all of them without a hand-written re-prime that the next ref added
+  // here would silently miss. But a remount also ran the engine's cleanup,
+  // and that cleanup must call close(), because browsers cap how many audio
+  // contexts a page may hold.
+  //
+  // A ref rather than the instance, so every `soundRef.current` read below
+  // keeps its empty dependency array and `cue`/`audition` keep their
+  // identity — see the note in SoundHost.
+  const { soundRef, soundReady, enableSound } = useSound();
   // Surfaced for tests: a sound leaves no trace on the screen, so without this
   // the only way to check one fired is to listen to it.
   const fxSeqRef = useRef(0);
@@ -677,44 +690,6 @@ const TvBoard: React.FC<TvBoardProps> = ({
       new URLSearchParams(window.location.search).get("fx") === "1"
     );
     setFxOn(true);
-    const sounds = createSoundBoard();
-    soundRef.current = sounds;
-    // Try without a gesture first. A kiosk-mode or autoplay-allowed browser
-    // lets this through, and then the venue never sees a prompt at all.
-    let mounted = true;
-    sounds.unlock().then(
-      (ok) => {
-        if (mounted) setSoundReady(ok);
-      },
-      // unlock() is written never to reject, and this is here anyway: if it
-      // ever does, an unhandled rejection leaves the board reporting
-      // `locked` with no way back, which is a bad way to find out.
-      () => {
-        if (mounted) setSoundReady(false);
-      }
-    );
-
-    // Hand the audio context back BEFORE the document goes away.
-    //
-    // React's cleanup does not reliably run on a reload, and a browser caps
-    // how many audio contexts a page may hold. Leaking one per refresh is
-    // how the board reached that cap and stopped making any sound at all —
-    // and why refreshing never fixed it while closing the page did, since
-    // only tearing the tab down reclaimed them.
-    const release = () => sounds.close();
-    window.addEventListener("pagehide", release);
-
-    return () => {
-      window.removeEventListener("pagehide", release);
-      mounted = false;
-      // Only surrender the ref if it still points at THIS board. React runs
-      // this effect twice in development, and an older instance's cleanup
-      // landing after the newer one has claimed the ref would blank it —
-      // leaving a board that reports itself armed while every play() call
-      // quietly no-ops through the optional chain.
-      if (soundRef.current === sounds) soundRef.current = null;
-      sounds.close();
-    };
   }, []);
 
   // Retries properly now. It used to be able to press against a board whose
@@ -751,18 +726,9 @@ const TvBoard: React.FC<TvBoardProps> = ({
     else el.webkitRequestFullscreen?.();
   }, []);
 
-  const enableSound = useCallback(() => {
-    const sounds = soundRef.current;
-    if (!sounds) return;
-    sounds.unlock().then(
-      (ok) => {
-        setSoundReady(ok);
-        // Immediate proof it works, and it doubles as the level-setting tone.
-        if (ok) sounds.play("test", { force: true });
-      },
-      () => setSoundReady(false)
-    );
-  }, []);
+  // enableSound moved to SoundHost with the engine it unlocks: the retry has
+  // to outlive this component, or pressing it on a board that later swaps act
+  // would arm a context that the swap then threw away.
 
   // Raise the picture for a sound that just played.
   //

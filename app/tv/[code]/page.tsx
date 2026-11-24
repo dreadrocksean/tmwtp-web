@@ -14,6 +14,7 @@ import {
 } from "@/lib/board";
 import { getBoardByCode } from "@/lib/gcp/board";
 import BoardNotFound from "./BoardNotFound";
+import SoundHost from "./SoundHost";
 import TvBoard from "./TvBoard";
 
 export const dynamic = "force-dynamic";
@@ -90,13 +91,19 @@ const TvBoardPage = async ({ params, searchParams }: TvPageProps) => {
     xmlDeclaration: false,
   }).svg();
 
+  // SoundHost owns the audio context. On this route the board never remounts,
+  // so the wrapper changes nothing a venue can see — it is here so that ONE
+  // component owns the engine on both routes, rather than the per-artist board
+  // creating its own and the stage board borrowing one.
   return (
-    <TvBoard
-      code={code}
-      displayCode={displayCode}
-      initial={board}
-      qrSvg={qrSvg}
-    />
+    <SoundHost>
+      <TvBoard
+        code={code}
+        displayCode={displayCode}
+        initial={board}
+        qrSvg={qrSvg}
+      />
+    </SoundHost>
   );
 };
 

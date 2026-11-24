@@ -29,6 +29,23 @@ const nextConfig = {
       // beforeFiles, so the code is claimed before /[webRoute] can read it as
       // an artist page. That only matters on this host; www is untouched.
       beforeFiles: [
+        // A STAGE, NOT A CODE. Two segments, which is what keeps it clear of
+        // the single-segment code rule below — a one-word slug could not be
+        // safe here: /stage is five characters so it would miss that rule and
+        // fall through to /[webRoute] as an artist named "stage", while
+        // /mystage is seven so it would MATCH and be looked up as a board
+        // code that does not exist. Both failures are a 404 at a gig.
+        {
+          source: "/stage/:slug",
+          has: [{ type: "host", value: TV_HOST }],
+          destination: "/tv/stage/:slug",
+        },
+        {
+          // The host's picker, a guessable sibling of the wall's own URL.
+          source: "/stage/:slug/control",
+          has: [{ type: "host", value: TV_HOST }],
+          destination: "/tv/stage/:slug/control",
+        },
         {
           // Six alphanumerics, with or without the separator — the same shapes
           // normalizeBoardCode already forgives. The page re-canonicalises and
