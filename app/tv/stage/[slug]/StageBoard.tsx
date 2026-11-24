@@ -27,7 +27,7 @@
 // the next ref somebody adds to that file.
 
 import React, { useCallback, useEffect, useState } from "react";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 
 import { db } from "@/lib/gcp/client";
 import { Board, formatBoardCode, normalizeBoardCode, toBoard } from "@/lib/board";
@@ -127,37 +127,57 @@ export const StageBoard: React.FC<StageBoardProps> = ({
     return unsub;
   }, [artistId]);
 
-  // Fetch the new act's standings ONCE before handing them to the board, so
-  // the swap does not flash an empty wall for the frame it takes TvBoard's
-  // own listener to deliver the first snapshot. A read, not a listener — the
-  // board subscribes to the same document itself and owns it from here.
+  // The new act's standings, WATCHED rather than read once.
+  //
+  // This was a single getDoc, on the reasoning that TvBoard subscribes to the
+  // same document itself and owns it from there. That reasoning has a dead
+  // end in it: when the document does not exist YET, this set board to null,
+  // the holding screen rendered instead of TvBoard, TvBoard's own listener
+  // therefore never ran, and nothing was left to notice the document
+  // appearing. The wall sat on the holding screen until the host changed the
+  // pointer again.
+  //
+  // Which is not a corner case, because the app now mints a TV code the first
+  // time an act is put on the wall. publicBoards/{code} is built by a
+  // separate Cloud Function AFTER that, so for a few seconds the pointer
+  // names a real act with a real code and no board document — exactly the
+  // state this used to get stuck in. Adrian, 2026-11-24: "it took 26secs to
+  // change", at random. Random because it only happened to acts being put up
+  // for the first time.
+  //
+  // A listener costs one extra subscription on one document while the board
+  // below holds its own, and it removes the whole class of problem.
   useEffect(() => {
     if (!code) {
       setBoard(null);
       return;
     }
-    if (initialBoard && code === initialTarget?.code) return;
-    let live = true;
-    getDoc(doc(db, "publicBoards", code)).then(
+    const unsub = onSnapshot(
+      doc(db, "publicBoards", code),
       (snap) => {
-        if (!live) return;
-        setBoard(snap.exists() ? toBoard(snap.data() || {}) : null);
+        if (snap.exists()) setBoard(toBoard(snap.data() || {}));
+        // A missing document is NOT cleared back to null once we have one:
+        // an act that rotates its code mid-set would otherwise blank the
+        // wall. The holding screen is for before the first board arrives.
       },
       () => {
-        // A board we cannot pre-read still renders: TvBoard's own listener
-        // will fill it. Nothing to do but let it through.
-        if (live) setBoard(null);
+        // Terminal, like every other listener here: leave the wall showing
+        // whatever it last had rather than blanking a screen in a venue.
       }
     );
-    return () => {
-      live = false;
-    };
-  }, [code, initialBoard, initialTarget?.code]);
+    return unsub;
+  }, [code]);
 
   // NO ACT SELECTED is a normal state, not a fault — it is where this screen
   // sits before the first act of the night. Deliberately quiet: a venue
   // leaves this up for an hour before doors, so it must not look broken and
   // must not burn a bright panel into a plasma.
+  //
+  // DARK, LIKE THE BOARD IT IS ABOUT TO BECOME — `bg-bg-dark`, and never a
+  // colour that is not in tailwind.config. This shipped as `bg-bg`, which is
+  // not a colour in that config, so the class did nothing: the screen fell
+  // through to white and the white heading below went invisible on it. What
+  // Adrian saw was a blank page with one grey line in the middle of it.
   //
   // IT CARRIES THE TWO SETUP BUTTONS, which is not decoration. This screen
   // renders INSTEAD of the board, so without them the one state a venue is
@@ -167,7 +187,7 @@ export const StageBoard: React.FC<StageBoardProps> = ({
   // kind of ordering rule that gets discovered at 7:45pm.
   if (!code || !board) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center bg-bg px-[max(16px,env(safe-area-inset-left,0px))] text-center text-cyan">
+      <main className="flex min-h-screen flex-col items-center justify-center bg-bg-dark px-[max(16px,env(safe-area-inset-left,0px))] text-center text-cyan">
         <p className="text-[clamp(1.25rem,3.4vw,4rem)] font-bold leading-tight text-white">
           Up next
         </p>

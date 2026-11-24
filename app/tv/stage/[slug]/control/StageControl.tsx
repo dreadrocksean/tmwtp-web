@@ -13,7 +13,15 @@
 // wants their name on it before they sit down.
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  OAuthProvider,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  type User,
+} from "firebase/auth";
 import {
   collection,
   doc,
@@ -36,6 +44,39 @@ type Act = {
 };
 
 const TV_HOST = "tv.tellmewhat2play.com";
+
+// EVERY BRANCH OF THIS PAGE PAINTS THE DARK GROUND ITSELF. There is no layout
+// above /tv that does it, so a branch that forgets lands on the browser's
+// white — which is what happened here, and on a phone held up in a dark bar
+// that is a torch in the face. min-h-screen, not h-screen: the act list is
+// longer than a phone.
+const Shell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <main className="min-h-screen bg-bg-dark text-white">
+    <div className="mx-auto max-w-lg px-5 py-8">{children}</div>
+  </main>
+);
+
+// Say which thing went wrong. "Invalid credentials or network issue" covered
+// four unrelated failures with one sentence, and the one that was actually
+// happening -- an account that has no password because it signs in with
+// Google -- is the one it described worst.
+const signInMessage = (err: unknown): string => {
+  const code = String((err as { code?: unknown })?.code ?? "");
+  if (code.includes("wrong-password") || code.includes("invalid-credential"))
+    return "That email and password did not match. If you normally sign in with Google or Apple, use the buttons above \u2014 those accounts have no password.";
+  if (code.includes("user-not-found")) return "No account with that email.";
+  if (code.includes("too-many-requests"))
+    return "Too many attempts. Wait a minute, or use Google above.";
+  if (code.includes("popup-closed") || code.includes("cancelled-popup"))
+    return "Sign-in window closed.";
+  if (code.includes("popup-blocked"))
+    return "The browser blocked the sign-in window. Allow pop-ups for this site and try again.";
+  if (code.includes("unauthorized-domain"))
+    return `${TV_HOST} is not an authorised domain in Firebase Auth, so Google sign-in cannot run here. Add it under Authentication \u2192 Settings \u2192 Authorised domains.`;
+  if (code.includes("operation-not-allowed"))
+    return "That sign-in method is switched off for this project.";
+  return code ? `Sign-in failed (${code}).` : "Sign-in failed.";
+};
 
 export const StageControl: React.FC<{ slug: string }> = ({ slug }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -203,7 +244,7 @@ export const StageControl: React.FC<{ slug: string }> = ({ slug }) => {
         <button
           type="submit"
           disabled={busy}
-          className="mt-4 w-full rounded-full bg-lime px-4 py-2 font-bold text-bg disabled:opacity-50"
+          className="mt-4 w-full rounded-full bg-lime px-4 py-2 font-bold text-bg-dark disabled:opacity-50"
         >
           {busy ? "Signing in…" : "Sign in"}
         </button>
