@@ -721,6 +721,36 @@ const TvBoard: React.FC<TvBoardProps> = ({
   // first attempt had failed and get the same failure back forever, because
   // the failed render was cached — see unlock(). Pressing it is a real
   // second chance.
+  // Full screen, for the Fire TV's Silk browser and anything else whose
+  // address bar sits over the top of the board. Browsers only grant it from a
+  // press, so it cannot happen on load — this is the one press. Hidden while
+  // already full screen, and on browsers with no API to call.
+  const [fsAvailable, setFsAvailable] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const doc = document as Document & { webkitFullscreenElement?: Element };
+    const el = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => void;
+    };
+    setFsAvailable(!!(el.requestFullscreen || el.webkitRequestFullscreen));
+    const sync = () =>
+      setIsFullscreen(!!(doc.fullscreenElement || doc.webkitFullscreenElement));
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+    };
+  }, []);
+  const enterFullscreen = useCallback(() => {
+    const el = document.documentElement as HTMLElement & {
+      webkitRequestFullscreen?: () => void;
+    };
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+    else el.webkitRequestFullscreen?.();
+  }, []);
+
   const enableSound = useCallback(() => {
     const sounds = soundRef.current;
     if (!sounds) return;
@@ -1915,6 +1945,18 @@ const TvBoard: React.FC<TvBoardProps> = ({
             </button>
           )}
         </div>
+      )}
+
+      {fsAvailable && !isFullscreen && (
+        /* A real button so a TV remote can focus it. Bottom left, out of the
+           way of the sound badge and the code. */
+        <button
+          type="button"
+          onClick={enterFullscreen}
+          className="fixed bottom-[1vw] left-[1.2vw] z-30 rounded-full border border-cyan/40 bg-bg-overly/80 px-[1vw] py-[0.4vw] text-[clamp(0.5rem,0.8vw,1rem)] font-bold uppercase tracking-[0.2em] leading-none text-cyan hover:text-white focus:outline-none focus-visible:ring-[0.25vw] focus-visible:ring-lime"
+        >
+          ⛶ Full screen
+        </button>
       )}
 
       <span className="pointer-events-none fixed bottom-[1vw] right-[1.2vw] text-[clamp(0.5rem,0.8vw,1rem)] uppercase tracking-[0.3em] text-cyan/50">
