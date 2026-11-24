@@ -1349,6 +1349,41 @@ const TvBoard: React.FC<TvBoardProps> = ({
           </div>
         ) : (
           <>
+        {/* ── WHAT THEY ARE PLAYING, ABOVE THE STANDINGS ────────────────
+            Adrian, 2026-11-23: "also show now playing on the board."
+
+            ABOVE the Crowd Favorites, and not in them. The standings answer
+            "what next"; this answers "what is this", which is the question a
+            room actually asks out loud -- and the playing song is not IN the
+            standings anyway, because opening it zeroes its votes.
+
+            No rank, no vote count, no bar. The row is deliberately unlike a
+            standings row so nobody reads it as the leader.
+
+            `shrink-0` because the list below is flex-1 and will give up its
+            own height first; this line must not be the thing that collapses. */}
+        {board.nowPlaying && (
+          <div className="mt-[1.4vw] shrink-0 rounded-[0.6vw] bg-lime/15 px-[1.4vw] py-[0.9vw] ring-[0.15vw] ring-lime/50">
+            <p className="flex items-center gap-[0.7vw] text-[clamp(0.6rem,1.1vw,1.4rem)] font-bold uppercase leading-none tracking-[0.25em] text-lime">
+              {/* A quiet pulse, so a glance from across the bar reads it as
+                  happening rather than as another heading. */}
+              <span
+                aria-hidden
+                className="inline-block size-[0.7vw] shrink-0 animate-pulse rounded-full bg-lime"
+              />
+              Now Playing
+            </p>
+            <p className="mt-[0.5vw] truncate text-[clamp(1rem,2.4vw,3.2rem)] font-bold leading-none text-white">
+              {board.nowPlaying.title}
+            </p>
+            {board.nowPlaying.artist && (
+              <p className="mt-[0.35vw] truncate text-[clamp(0.7rem,1.3vw,1.75rem)] leading-none text-white/60">
+                {board.nowPlaying.artist}
+              </p>
+            )}
+          </div>
+        )}
+
         {board.songs.length > 0 && (
           <p className="mt-[1.6vw] text-[clamp(0.7rem,1.3vw,1.75rem)] font-bold uppercase leading-none tracking-[0.25em] text-cyan">
             🔥 Crowd Favorites

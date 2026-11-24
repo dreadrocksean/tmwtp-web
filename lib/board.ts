@@ -53,6 +53,18 @@ export interface BoardTip {
   at: number;
 }
 
+// WHAT THE ACT IS PLAYING RIGHT NOW. Null between songs, which is most of
+// the night.
+//
+// No vote count, deliberately. Opening a song calls resetSongVotes and zeroes
+// it, so a number here would read as "nobody wants this" about the one song
+// the room is definitely listening to.
+export interface BoardNowPlaying {
+  songId: string;
+  title: string;
+  artist: string | null;
+}
+
 export interface BoardSupporter {
   name: string;
   votes: number;
@@ -83,6 +95,7 @@ export interface Board {
   showTitle: string | null;
   venueName: string | null;
   songs: BoardSong[];
+  nowPlaying: BoardNowPlaying | null;
   totalVotes: number;
   recentTip: BoardTip | null;
   topSupporter: BoardSupporter | null;
@@ -120,6 +133,20 @@ export const toBoard = (data: Record<string, any>): Board => ({
         votes: typeof song?.votes === "number" ? song.votes : 0,
       }))
     : [],
+  // Tolerant of boards written before the field existed: an older doc simply
+  // has no now-playing banner, which is what those boards render today.
+  nowPlaying:
+    data.nowPlaying?.songId && data.nowPlaying?.title
+      ? {
+          songId: String(data.nowPlaying.songId),
+          title: String(data.nowPlaying.title),
+          artist:
+            typeof data.nowPlaying.artist === "string" &&
+            data.nowPlaying.artist.trim()
+              ? data.nowPlaying.artist.trim()
+              : null,
+        }
+      : null,
   totalVotes: typeof data.totalVotes === "number" ? data.totalVotes : 0,
   recentTip: data.recentTip?.id
     ? {
