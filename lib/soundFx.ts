@@ -60,9 +60,30 @@ export type SoundId =
   | "we-love-you-landon"
   | "we-love-you-adrian"
   | "we-love-you-guys"
+  // Phrases with NO NAME in them. The three above are the reason this
+  // catalogue will eventually have to be resolved per artist; these are the
+  // reason that is not urgent. "I love you" is correct in front of every act
+  // on the platform, including the ones nobody has signed yet.
+  | "i-love-you"
+  | "dats-my-jam"
+  | "love-this-song"
+  // Wordless reactions from the ROOM rather than from one person, which is
+  // why they are filed as crowd and not as heckle: the governor spaces a
+  // room's reaction differently from a single voice.
+  | "aww"
+  | "oooh"
   // Hecklers: a single voice from the room, landing in a gap.
   | "freebird"
   | "boo"
+  | "yeah"
+  | "wow"
+  | "yess"
+  | "come-on"
+  | "fire"
+  | "damn"
+  | "booyah"
+  | "growl"
+  | "mmm"
   // Beds: ambience that runs for ten to thirty seconds under the band.
   | "breeze"
   | "surf"
@@ -116,21 +137,18 @@ interface SoundSpec {
   trim?: number;
 }
 
-// Beds are trimmed to this under the levelled target.
-const BED_TRIM = 0.55;
-
-// Decibels, because that is the unit a level is judged in at a desk. -4dB is
-// 0.63 of the amplitude and -5dB is 0.56; writing the figure rather than the
-// ratio means the next adjustment is the number someone actually says.
-const dB = (value: number): number => Math.pow(10, value / 20);
-
-// Adrian, at a live show, 2026-11-21: "Applause is too loud. bring down 4db"
-// and "Shhhh ios too loud. reduce by 5db." Levelling put every one-shot on
-// one target, which is right for peak and wrong for how loud a thing FEELS:
-// a two-second wall of hands and a close sibilant both measure the same and
-// neither sits where it should next to a band.
-const APPLAUSE_TRIM = dB(-4);
-const SHH_TRIM = dB(-5);
+// NO PER-SOUND TRIM LIVES HERE ANY MORE. `trim` stays on SoundSpec as a hook
+// and nothing sets it, because every level decision now belongs to the file.
+//
+// There used to be three. BED_TRIM put beds 5.2dB under the one-shots, and
+// APPLAUSE_TRIM/-4dB and SHH_TRIM/-5dB were Adrian's own corrections from a
+// live show on 2026-11-21 ("Applause is too loud. bring down 4db", "Shhhh ios
+// too loud. reduce by 5db"). All three were compensating for the load-time
+// normaliser that measureRms replaced. A bed still needs to sit under a hit,
+// but that is now authored into the bed's own file, where it can be judged
+// against a recording of the room instead of guessed at as a ratio.
+//
+// A TRIM SET HERE SILENTLY MULTIPLIES THE DAW PASS. Don't.
 
 // HOW LONG A BED TAKES TO ARRIVE. Adrian, 2026-11-21: "sfx ambience should
 // fade up."
@@ -292,7 +310,6 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
   applause: {
     label: "Applause",
     seconds: 2.8,
-    trim: APPLAUSE_TRIM,
     render: (ctx) => {
       const claps = burstSource(ctx, {
         seconds: 2.8,
@@ -348,7 +365,6 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
   shh: {
     label: "Shhhhh",
     seconds: 1.5,
-    trim: SHH_TRIM,
     render: (ctx) => {
       const noise = noiseSource(ctx, 1.5, 23);
       const bp = ctx.createBiquadFilter();
@@ -445,29 +461,92 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
     seconds: 2.5,
   },
 
+  // Added 2026-11-27. Recordings only, like the hecklers above and for the
+  // same reason: the content is a human voice. `seconds` is carried for shape
+  // only — none of these has a render, so a fetch failure leaves them silent.
+  //
+  // Levelled as families, not as files. Every take inside a family is within
+  // 0.05 dB of its siblings because the engine picks one AT RANDOM per press,
+  // so a spread between takes reads as the board being inconsistent rather
+  // than as variety. The three i-love-you takes arrived 4.5 dB apart.
+  "i-love-you": {
+    label: "I love you!",
+    seconds: 3,
+  },
+  "dats-my-jam": {
+    label: "Dat's my jam!",
+    seconds: 3,
+  },
+  "love-this-song": {
+    label: "Love this song!",
+    seconds: 3,
+  },
+  aww: {
+    label: "Awwww",
+    seconds: 1.5,
+  },
+  oooh: {
+    label: "Ooooohhhh",
+    seconds: 2.5,
+  },
+  yeah: {
+    label: "Yeah!",
+    seconds: 1,
+  },
+  wow: {
+    label: "Wow",
+    seconds: 1,
+  },
+  yess: {
+    label: "Yesssss",
+    seconds: 1.5,
+  },
+  "come-on": {
+    label: "Come on!",
+    seconds: 1,
+  },
+  fire: {
+    label: "Fire!",
+    seconds: 1,
+  },
+  damn: {
+    label: "Damn!",
+    seconds: 1.5,
+  },
+  booyah: {
+    label: "Booyah!",
+    seconds: 2,
+  },
+  // The two long ones. `growl` and `mmm` run 5 and 6 seconds against the one
+  // second of a "Yeah!", so they occupy a gap rather than punctuating it.
+  growl: {
+    label: "Growl",
+    seconds: 5,
+  },
+  mmm: {
+    label: "Mmmm",
+    seconds: 6,
+  },
+
   breeze: {
     label: "Breeze",
     seconds: 30,
     bed: true,
-    trim: BED_TRIM,
   },
   surf: {
     label: "Surf",
     seconds: 15,
     bed: true,
-    trim: BED_TRIM,
   },
   "night-forest": {
     label: "Night forest",
     seconds: 15,
     bed: true,
-    trim: BED_TRIM,
   },
   "large-crowd": {
     label: "Large crowd",
     seconds: 10,
     bed: true,
-    trim: BED_TRIM,
   },
 
   // The synth here is the one that is not an apology. Rain IS filtered noise,
@@ -479,7 +558,6 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
     label: "Rain",
     seconds: 20,
     bed: true,
-    trim: BED_TRIM,
     render: (ctx) => {
       // Faded in rather than switched on. Every other bed is a recording that
       // the encoder happened to start quietly; this one would otherwise
@@ -526,7 +604,7 @@ const SOUNDS: Record<SoundId, SoundSpec> = {
   // Battle ambience for a scene — the artist asked for this against the
   // Revolutionary Etude, which is the clearest statement yet that beds are
   // not just weather.
-  battle: { label: "Battle", seconds: 20, bed: true, trim: BED_TRIM },
+  battle: { label: "Battle", seconds: 20, bed: true },
 
   // ---- game cues ---------------------------------------------------------
   //
@@ -780,8 +858,38 @@ const FAN_PLAYABLE: ReadonlySet<string> = new Set(
 export const isFanSoundId = (value: unknown): value is SoundId =>
   typeof value === "string" && FAN_PLAYABLE.has(value);
 
-// Scale a rendered buffer in place. See TARGET_RMS above for why RMS leads and
-// the peak only clamps.
+// What a buffer's RMS already is, WITHOUT touching it.
+//
+// A FILE IS NEVER RESCALED. Its level is a decision somebody made in a DAW
+// against a recording of the actual room, and the whole point of making it
+// there is that nothing downstream second-guesses it. This exists only because
+// endsAbruptly needs to know how loud the tail is relative to the body before
+// it decides whether to fade it.
+//
+// It used to be level() here, which rescaled every sample on load: RMS to
+// TARGET_RMS, clamped by PEAK_CEILING. On 20 of the 26 files the CLAMP was
+// what bound, so in practice it was a peak normaliser -- it handed rain2
+// +25dB and shh +27dB and then wondered why a wall-of-sound shout and a
+// sparse explosion, both sitting at the same RMS, were nothing like as loud
+// as each other in a noisy bar. APPLAUSE_TRIM and SHH_TRIM were patches on
+// exactly that. Adrian, 2026-11-26: "ideally i want the code to put them on
+// full vol and let the sounds themselves be balanced."
+const measureRms = (buffer: AudioBuffer): number => {
+  let sumSquares = 0;
+  let count = 0;
+  for (let c = 0; c < buffer.numberOfChannels; c += 1) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < data.length; i += 1) {
+      sumSquares += data[i] * data[i];
+      count += 1;
+    }
+  }
+  return count ? Math.sqrt(sumSquares / count) : 0;
+};
+
+// Scale a RENDERED buffer in place. Synthesized sounds have no author and no
+// DAW pass behind them, so they still need putting on a target; see TARGET_RMS
+// above for why RMS leads and the peak only clamps. NOT used on files.
 const level = (buffer: AudioBuffer): number => {
   let sumSquares = 0;
   let peak = 0;
@@ -897,7 +1005,7 @@ export const createSoundBoard = (options?: {
   volume?: number;
   preset?: SoundPresetId;
 }): SoundBoard => {
-  const volume = options?.volume ?? 0.9;
+  const volume = options?.volume ?? 1;
 
   // The single global cooldown this used to carry has been replaced by the
   // governor, which knows what KIND each sound is. That is a deliberate
@@ -978,7 +1086,7 @@ export const createSoundBoard = (options?: {
               try {
                 const res = await fetch(url);
                 const buffer = await live.decodeAudioData(await res.arrayBuffer());
-                needsTailFade.set(buffer, endsAbruptly(buffer, level(buffer)));
+                needsTailFade.set(buffer, endsAbruptly(buffer, measureRms(buffer)));
                 return buffer;
               } catch {
                 return null;

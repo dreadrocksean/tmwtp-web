@@ -5,6 +5,9 @@ export const SFX_FAMILIES: Record<string, readonly string[]> = {
   "applause": [
     "/sfx/applause.m4a",
   ],
+  "aww": [
+    "/sfx/aww.m4a",
+  ],
   "battle": [
     "/sfx/battle1.mp3",
     "/sfx/battle2.mp3",
@@ -12,6 +15,9 @@ export const SFX_FAMILIES: Record<string, readonly string[]> = {
   ],
   "boo": [
     "/sfx/boo.m4a",
+  ],
+  "booyah": [
+    "/sfx/booyah.mp3",
   ],
   "breeze": [
     "/sfx/breeze.mp3",
@@ -22,9 +28,22 @@ export const SFX_FAMILIES: Record<string, readonly string[]> = {
     "/sfx/cheers3.mp3",
     "/sfx/cheers4.mp3",
   ],
+  "come-on": [
+    "/sfx/come-on.m4a",
+  ],
+  "damn": [
+    "/sfx/damn.m4a",
+  ],
+  "dats-my-jam": [
+    "/sfx/dats-my-jam1.mp3",
+    "/sfx/dats-my-jam2.mp3",
+  ],
   "explosion": [
     "/sfx/explosion1.mp3",
     "/sfx/explosion2.mp3",
+  ],
+  "fire": [
+    "/sfx/fire.m4a",
   ],
   "fog-horn": [
     "/sfx/fog-horn.mp3",
@@ -35,11 +54,31 @@ export const SFX_FAMILIES: Record<string, readonly string[]> = {
   "gong": [
     "/sfx/gong.m4a",
   ],
+  "growl": [
+    "/sfx/growl.mp3",
+  ],
+  "i-love-you": [
+    "/sfx/i-love-you1.mp3",
+    "/sfx/i-love-you2.mp3",
+    "/sfx/i-love-you3.mp3",
+  ],
   "large-crowd": [
     "/sfx/large-crowd.mp3",
   ],
+  "love-this-song": [
+    "/sfx/love-this-song1.mp3",
+    "/sfx/love-this-song2.mp3",
+  ],
+  "mmm": [
+    "/sfx/mmm1.mp3",
+    "/sfx/mmm2.mp3",
+    "/sfx/mmm3.mp3",
+  ],
   "night-forest": [
     "/sfx/night-forest.mp3",
+  ],
+  "oooh": [
+    "/sfx/oooh.m4a",
   ],
   "rain": [
     "/sfx/rain1.mp3",
@@ -63,8 +102,17 @@ export const SFX_FAMILIES: Record<string, readonly string[]> = {
   "we-love-you-landon": [
     "/sfx/we-love-you-landon.mp3",
   ],
+  "wow": [
+    "/sfx/wow.m4a",
+  ],
   "xmas-bells": [
     "/sfx/xmas-bells.mp3",
+  ],
+  "yeah": [
+    "/sfx/yeah.m4a",
+  ],
+  "yess": [
+    "/sfx/yess.m4a",
   ],
 };
 
