@@ -1069,8 +1069,20 @@ export const createSoundBoard = (options?: {
     if (!Offline) return;
 
     // Rendered up front, at unlock, so that play() is a buffer hand-off with
-    // no decode or network in the path. The whole set is a few hundred
-    // milliseconds of audio.
+    // no decode or network in the path.
+    //
+    // A SOUND BECOMES PLAYABLE THE MOMENT ITS OWN FILE LANDS, not when the
+    // last of the set does. This used to be all-or-nothing: `ready` was set
+    // after the Promise.all below, so every press returned false until the
+    // slowest file in the catalogue had downloaded AND decoded. That was
+    // invisible — a drop looks exactly like a dead button — and it got worse
+    // in proportion to the catalogue, which is how it surfaced: the set went
+    // from 25 files to 46 (7.4 MB) and the dead window went with it.
+    //
+    // Nothing here needed to wait on anything else. Each id's buffers are
+    // stored as they resolve, and play() already refuses an id it has no
+    // buffer for, so arming per sound is both correct and what the room
+    // expects: press a button, hear that button.
     await Promise.all(
       (Object.keys(SOUNDS) as SoundId[]).map(async (id) => {
         const spec = SOUNDS[id];
@@ -1096,6 +1108,8 @@ export const createSoundBoard = (options?: {
           const loaded = decoded.filter((b): b is AudioBuffer => b !== null);
           if (loaded.length) {
             buffers.set(id, loaded);
+            // Armed as soon as anything at all can make a noise.
+            ready = true;
             return;
           }
           // Every variant failed. Fall through to the synth rather than
@@ -1117,6 +1131,7 @@ export const createSoundBoard = (options?: {
           const rendered = await offline.startRendering();
           needsTailFade.set(rendered, endsAbruptly(rendered, level(rendered)));
           buffers.set(id, [rendered]);
+          ready = true;
         } catch (err) {
           console.error(`soundFx: ${id} failed to render`, err);
         }
