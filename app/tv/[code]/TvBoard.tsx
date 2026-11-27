@@ -375,6 +375,9 @@ const cleanHeckleName = (raw: unknown): string =>
 // translating between two layouts.
 const PANEL_GROUPS: { kind: SoundKind; title: string }[] = [
   { kind: "crowd", title: "Crowd" },
+  // Between Crowd and Hits on purpose: a reaction is the nearest thing to
+  // the room making a noise by itself.
+  { kind: "reaction", title: "Reactions" },
   { kind: "hit", title: "Hits" },
   { kind: "heckle", title: "Hecklers" },
   { kind: "phrase", title: "Chants" },

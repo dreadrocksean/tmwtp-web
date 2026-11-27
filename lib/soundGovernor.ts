@@ -36,7 +36,13 @@ import type { SoundId } from "./soundFx";
 // Deliberately NOT the same axis as `bed`, which is playback mechanics.
 // `large-crowd` is mechanically a bed and behaviourally crowd noise, and needs
 // the bed's playback with the crowd's freedom.
-export type SoundKind = "crowd" | "ambience" | "hit" | "phrase" | "heckle";
+export type SoundKind =
+  | "crowd"
+  | "reaction"
+  | "ambience"
+  | "hit"
+  | "phrase"
+  | "heckle";
 
 export const SOUND_KIND: Record<SoundId, SoundKind> = {
   applause: "crowd",
@@ -55,15 +61,15 @@ export const SOUND_KIND: Record<SoundId, SoundKind> = {
   "love-this-song": "phrase",
   aww: "crowd",
   oooh: "crowd",
-  yeah: "heckle",
-  wow: "heckle",
-  yess: "heckle",
-  "come-on": "heckle",
-  fire: "heckle",
-  damn: "heckle",
-  booyah: "heckle",
-  growl: "heckle",
-  mmm: "heckle",
+  yeah: "reaction",
+  wow: "reaction",
+  yess: "reaction",
+  "come-on": "reaction",
+  fire: "reaction",
+  damn: "reaction",
+  booyah: "reaction",
+  growl: "reaction",
+  mmm: "reaction",
   breeze: "ambience",
   surf: "ambience",
   "night-forest": "ambience",
@@ -109,6 +115,16 @@ export const KIND_RULE: Record<SoundKind, SoundRule> = {
   // is the sender's name going up on the venue screen with it, which is a
   // test that runs on every press rather than twice a night.
   heckle: { cooldownMs: 45000, scope: "room", when: "between", maxPerShow: 6 },
+  // Added 2026-11-27. One voice, like a heckle, and nothing else like one.
+  // A heckle interrupts; a reaction AGREES — "YEAH!" is what a room does when
+  // the solo lands, so `when: "any"` is the whole point: making it wait for a
+  // gap would move it off the only moment it means anything.
+  //
+  // Room-scoped rather than per-user, because forty people shouting the same
+  // single voice at once is mud rather than a roaring room — which is exactly
+  // what separates it from `crowd`, where mashing IS the feature. No per-show
+  // cap: it is appreciation, and capping applause makes no sense.
+  reaction: { cooldownMs: 4000, scope: "room", when: "any" },
 };
 
 // The density brake, and the rule per-sound cooldowns cannot express: twenty
@@ -121,6 +137,7 @@ export const ROOM_BUDGET_MS: Record<SoundKind, number> = {
   hit: 2500,
   phrase: 20000,
   heckle: 25000,
+  reaction: 4000,
 };
 
 // Per-show overrides, because the right amount of governance is a property of
@@ -142,8 +159,10 @@ export const SOUND_PRESETS: Record<
       phrase: { when: "between", maxPerShow: 2 },
       ambience: { when: "between" },
       heckle: { maxPerShow: 1 },
+      // The one room where even agreeing out loud waits for the gap.
+      reaction: { when: "between", cooldownMs: 15000 },
     },
-    budget: { hit: 15000, phrase: 60000, heckle: 120000 },
+    budget: { hit: 15000, phrase: 60000, heckle: 120000, reaction: 10000 },
   },
   "dueling-pianos": {
     rule: {
@@ -152,8 +171,9 @@ export const SOUND_PRESETS: Record<
       // The one room where shouting over the playing is the act rather than
       // an interruption, so the gap requirement comes off entirely.
       heckle: { when: "any", cooldownMs: 25000, maxPerShow: null },
+      reaction: { cooldownMs: 1500 },
     },
-    budget: { hit: 1500, phrase: 6000, heckle: 12000 },
+    budget: { hit: 1500, phrase: 6000, heckle: 12000, reaction: 1500 },
   },
 };
 
